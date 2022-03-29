@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
 )
@@ -28,6 +30,7 @@ func NewSyncHandler(s3Client *s3.Client, appConfig AppConfig) *SyncHandler {
 }
 
 func (s *SyncHandler) gatherS3Objects() error {
+	log.Info(fmt.Sprintf("Gathering S3 objects to compare from bucket %s\n", s.appConfig.DestinationBucket))
 	listParams := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.appConfig.DestinationBucket),
 	}
@@ -46,6 +49,7 @@ func (s *SyncHandler) gatherS3Objects() error {
 }
 
 func (s *SyncHandler) gatherLocalFiles() error {
+	log.Info(fmt.Sprintf("Gathering local files recursively for directory %s\n", s.appConfig.SourceFolder))
 	walkErr := filepath.Walk(s.appConfig.SourceFolder, func(path string, f os.FileInfo, err error) error {
 		s.localFiles[path] = f
 		return nil
@@ -58,5 +62,15 @@ func (s *SyncHandler) gatherLocalFiles() error {
 }
 
 func (s *SyncHandler) Sync() error {
+	s3GatherErr := s.gatherS3Objects()
+	if s3GatherErr != nil {
+		return fmt.Errorf("s3gather error: %s", s3GatherErr)
+	}
+
+	localGatherErr := s.gatherLocalFiles()
+	if localGatherErr != nil {
+		return fmt.Errorf("localgather error: %s", localGatherErr)
+	}
+
 	return nil
 }

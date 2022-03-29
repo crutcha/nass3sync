@@ -6,8 +6,8 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.16.1
 	github.com/aws/aws-sdk-go-v2/config v1.15.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.26.2
-	github.com/davecgh/go-spew v1.1.0
 	github.com/jinzhu/configor v1.2.1
+	github.com/sirupsen/logrus v1.8.1
 )
 
 require (
@@ -25,5 +25,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.11.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.16.2 // indirect
 	github.com/aws/smithy-go v1.11.2 // indirect
+	golang.org/x/sys v0.0.0-20191026070338-33540a1f6037 // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
