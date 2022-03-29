@@ -11,6 +11,9 @@ import (
 )
 
 func main() {
+	// TODO: put me into config or as env var!
+	log.SetLevel(log.DebugLevel)
+
 	configFilePath := flag.String("configfile", "", "Configuration File Path")
 	flag.Parse()
 

@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type SyncHandler struct {
@@ -51,7 +52,9 @@ func (s *SyncHandler) gatherS3Objects() error {
 func (s *SyncHandler) gatherLocalFiles() error {
 	log.Info(fmt.Sprintf("Gathering local files recursively for directory %s\n", s.appConfig.SourceFolder))
 	walkErr := filepath.Walk(s.appConfig.SourceFolder, func(path string, f os.FileInfo, err error) error {
-		s.localFiles[path] = f
+		if !f.IsDir() {
+			s.localFiles[path] = f
+		}
 		return nil
 	})
 	if walkErr != nil {
@@ -70,6 +73,21 @@ func (s *SyncHandler) Sync() error {
 	localGatherErr := s.gatherLocalFiles()
 	if localGatherErr != nil {
 		return fmt.Errorf("localgather error: %s", localGatherErr)
+	}
+
+	for localPath, localFileInfo := range s.localFiles {
+		val, ok := s.bucketFiles[localPath]
+		// TODO: do we need to worry about timezones or anything like that?
+		if !ok {
+			pathComponents := strings.Split(localPath, s.appConfig.SourceFolder)
+			// TODO: ensure we have at least 2 components?
+			uploadKey := pathComponents[1]
+			log.Debug(fmt.Sprintf("%s does not exist in bucket, will upload with key %s", localPath, uploadKey))
+		} else if ok && *val.LastModified != localFileInfo.ModTime() {
+			log.Info(fmt.Sprintf("%s has been modified, will update", localPath))
+		} else {
+			log.Info(fmt.Sprintf("%s is in sync, no action required", localPath))
+		}
 	}
 
 	return nil
