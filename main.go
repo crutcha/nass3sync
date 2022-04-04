@@ -58,7 +58,6 @@ func main() {
 
 	for _, bc := range appConfig.Backup {
 		bcJob, bcErr := scheduler.Cron(bc.At).Do(tarAndUploadBackup, bc, awsS3Client)
-		//bcJob, bcErr := scheduler.Every(1).Minutes().Do(tarAndUploadBackup, bc, awsS3Client)
 		if bcErr != nil {
 			log.Fatal(bcErr)
 		}

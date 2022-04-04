@@ -48,17 +48,17 @@ func tarAndUploadBackup(backupConfig BackupConfig, awsClient *s3.Client) {
 	}
 	defer uploadFile.Close()
 	uploader := manager.NewUploader(awsClient)
-	result, putErr := uploader.Upload(context.TODO(), &s3.PutObjectInput{
+	fileKey := filepath.Base(tarFile.Name())
+	_, putErr := uploader.Upload(context.TODO(), &s3.PutObjectInput{
 		Bucket: aws.String(backupConfig.DestinationBucket),
-		Key:    aws.String(filepath.Base(tarFile.Name())),
+		Key:    aws.String(fileKey),
 		Body:   uploadFile,
 	})
 	if putErr != nil {
 		log.Warn("Backup upload error: ", putErr)
+	} else {
+		log.Info("Upload succeded for ", fileKey)
 	}
-	log.Info("######")
-	log.Info(result)
-	log.Info("######")
 }
 
 func createArchive(files []string, buf io.Writer) error {
