@@ -12,28 +12,34 @@ import (
 	"strings"
 )
 
+type ObjectRequest struct {
+	Action string
+	Key    string
+	File   os.FileInfo
+}
+
 type SyncHandler struct {
 	bucketFiles map[string]types.Object
 	localFiles  map[string]os.FileInfo
 	s3Client    *s3.Client
-	appConfig   AppConfig
+	syncConfig  SyncConfig
 }
 
-func NewSyncHandler(s3Client *s3.Client, appConfig AppConfig) *SyncHandler {
+func NewSyncHandler(s3Client *s3.Client, syncConfig SyncConfig) *SyncHandler {
 	bucketFiles := make(map[string]types.Object)
 	localFiles := make(map[string]os.FileInfo)
 	return &SyncHandler{
 		bucketFiles: bucketFiles,
 		localFiles:  localFiles,
 		s3Client:    s3Client,
-		appConfig:   appConfig,
+		syncConfig:  syncConfig,
 	}
 }
 
 func (s *SyncHandler) gatherS3Objects() error {
-	log.Info(fmt.Sprintf("Gathering S3 objects to compare from bucket %s\n", s.appConfig.DestinationBucket))
+	log.Info(fmt.Sprintf("Gathering S3 objects to compare from bucket %s\n", s.syncConfig.DestinationBucket))
 	listParams := &s3.ListObjectsV2Input{
-		Bucket: aws.String(s.appConfig.DestinationBucket),
+		Bucket: aws.String(s.syncConfig.DestinationBucket),
 	}
 	paginator := s3.NewListObjectsV2Paginator(s.s3Client, listParams, func(o *s3.ListObjectsV2PaginatorOptions) {})
 	for paginator.HasMorePages() {
@@ -50,8 +56,8 @@ func (s *SyncHandler) gatherS3Objects() error {
 }
 
 func (s *SyncHandler) gatherLocalFiles() error {
-	log.Info(fmt.Sprintf("Gathering local files recursively for directory %s\n", s.appConfig.SourceFolder))
-	walkErr := filepath.Walk(s.appConfig.SourceFolder, func(path string, f os.FileInfo, err error) error {
+	log.Info(fmt.Sprintf("Gathering local files recursively for directory %s\n", s.syncConfig.SourceFolder))
+	walkErr := filepath.Walk(s.syncConfig.SourceFolder, func(path string, f os.FileInfo, err error) error {
 		if !f.IsDir() {
 			s.localFiles[path] = f
 		}
@@ -79,7 +85,7 @@ func (s *SyncHandler) Sync() error {
 		val, ok := s.bucketFiles[localPath]
 		// TODO: do we need to worry about timezones or anything like that?
 		if !ok {
-			pathComponents := strings.Split(localPath, s.appConfig.SourceFolder)
+			pathComponents := strings.Split(localPath, s.syncConfig.SourceFolder)
 			// TODO: ensure we have at least 2 components?
 			uploadKey := pathComponents[1]
 			log.Debug(fmt.Sprintf("%s does not exist in bucket, will upload with key %s", localPath, uploadKey))
@@ -87,6 +93,13 @@ func (s *SyncHandler) Sync() error {
 			log.Info(fmt.Sprintf("%s has been modified, will update", localPath))
 		} else {
 			log.Info(fmt.Sprintf("%s is in sync, no action required", localPath))
+		}
+	}
+
+	for key, _ := range s.bucketFiles {
+		_, ok := s.localFiles[key]
+		if !ok {
+			log.Info(fmt.Sprintf("%s exists in bucket but not locally, will tombstone", key))
 		}
 	}
 
