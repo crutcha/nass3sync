@@ -33,7 +33,7 @@ func tarAndUploadBackup(backupConfig BackupConfig, awsClient *s3.Client) {
 	backupTimestamp := now.Format(time.RFC3339)
 	backupPrefix := fmt.Sprintf("%s_%s_*.tar.gz", filepath.Base(backupConfig.SourceFolder), backupTimestamp)
 	tarFile, _ := ioutil.TempFile(os.TempDir(), backupPrefix)
-	//defer os.Remove(tarFile.Name())
+	defer os.Remove(tarFile.Name())
 
 	log.Info(fmt.Sprintf("Creating backup tarball: %s", tarFile.Name()))
 	//defer os.Remove(tarFile)
