@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -38,15 +39,25 @@ func tarAndUploadBackup(backupConfig BackupConfig, awsClient *s3.Client) {
 	//defer os.Remove(tarFile)
 	createArchive(filesToCompress, tarFile)
 
-	log.Info("Uploading tarball: ", tarFile.Name())
-	putObjectRequest := s3.PutObjectInput{
+	// this is janky but the way this is written, this file descripter would be closed already
+	// so....we need to open the file again
+	uploadFile, uploadFileOpenErr := os.Open(tarFile.Name())
+	if uploadFileOpenErr != nil {
+		log.Warn("Error uploading backup: ", uploadFileOpenErr)
+		return
+	}
+	defer uploadFile.Close()
+	uploader := manager.NewUploader(awsClient)
+	result, putErr := uploader.Upload(context.TODO(), &s3.PutObjectInput{
 		Bucket: aws.String(backupConfig.DestinationBucket),
 		Key:    aws.String(filepath.Base(tarFile.Name())),
-		Body:   tarFile,
+		Body:   uploadFile,
+	})
+	if putErr != nil {
+		log.Warn("Backup upload error: ", putErr)
 	}
-	debugOutput, putObjectErr := awsClient.PutObject(context.TODO(), &putObjectRequest)
 	log.Info("######")
-	log.Info(debugOutput, putObjectErr)
+	log.Info(result)
 	log.Info("######")
 }
 
