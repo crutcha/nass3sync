@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 type ObjectRequests struct {
@@ -84,6 +85,8 @@ func (s *SyncHandler) Sync() error {
 	}
 	defer s.mutex.Unlock()
 
+	log.Info(fmt.Sprintf("Starting sync routine for %s", s.syncConfig.SourceFolder))
+	syncStartTime := time.Now()
 	s3GatherErr := s.gatherS3Objects()
 	if s3GatherErr != nil {
 		return fmt.Errorf("s3gather error: %s", s3GatherErr)
@@ -126,6 +129,9 @@ func (s *SyncHandler) Sync() error {
 	}
 
 	s.syncObjectRequests(objectRequests)
+	syncEndTime := time.Now()
+	duration := syncEndTime.Sub(syncStartTime)
+	log.Info("Sync complete. Took %s\n", duration.String())
 
 	return nil
 }
