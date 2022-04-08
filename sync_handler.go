@@ -91,6 +91,12 @@ func (s *SyncHandler) Sync() error {
 	}
 	defer s.mutex.Unlock()
 
+	// TODO: probably some better way to handle this
+	// since gocron is setup with a pointer to a synchandler, we need to flush
+	// the state from the last time it ran
+	s.bucketFiles = make(map[string]types.Object)
+	s.localFiles = make(map[string]os.FileInfo)
+
 	log.Info(fmt.Sprintf("Starting sync routine for %s", s.syncConfig.SourceFolder))
 	syncStartTime := time.Now()
 	s3GatherErr := s.gatherS3Objects()
@@ -185,9 +191,7 @@ func (s *SyncHandler) syncObjectRequests(objReqs ObjectRequests) {
 
 	}
 
-	fmt.Println("WAITING ON WAITGROUP")
 	wg.Wait()
-	fmt.Println("AFTER WAITGROUP")
 }
 
 func (s *SyncHandler) uploadFile(key, filePath string, semaphore chan int, wg *sync.WaitGroup) error {
