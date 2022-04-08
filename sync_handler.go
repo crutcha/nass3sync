@@ -250,11 +250,10 @@ func (s *SyncHandler) tombstoneObject(key string, semaphore chan int, wg *sync.W
 
 	delReq := &s3.DeleteObjectInput{
 		Bucket: aws.String(s.syncConfig.DestinationBucket),
-		Key:    aws.String(key),
+		Key:    aws.String(strings.TrimPrefix(key, "/")),
 	}
 
-	delResult, delErr := s.s3Client.DeleteObject(context.TODO(), delReq)
-	log.Info(fmt.Sprintf("DELRESULT: %+v", delResult))
+	_, delErr := s.s3Client.DeleteObject(context.TODO(), delReq)
 
 	if delErr != nil {
 		log.Warn(fmt.Sprintf("Error deleting original object during tombstone routine: %s", delErr))
