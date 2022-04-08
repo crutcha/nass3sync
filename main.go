@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/go-co-op/gocron"
 	"github.com/jinzhu/configor"
@@ -44,10 +45,11 @@ func main() {
 	}
 
 	awsS3Client := s3.NewFromConfig(cfg)
+	awsSNSClient := sns.NewFromConfig(cfg)
 	scheduler := gocron.NewScheduler(time.UTC)
 
 	for _, sc := range appConfig.Sync {
-		syncHandler := NewSyncHandler(awsS3Client, sc)
+		syncHandler := NewSyncHandler(awsS3Client, awsSNSClient, sc, appConfig.SNSTopic)
 		scJob, scErr := scheduler.Every(sc.Interval).Minutes().Do(syncHandler.Sync)
 		if scErr != nil {
 			log.Fatal(scErr)

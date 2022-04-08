@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.3
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.11.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.26.3
+	github.com/aws/aws-sdk-go-v2/service/sns v1.17.4
 	github.com/go-co-op/gocron v1.13.0
 	github.com/jinzhu/configor v1.2.1
 	github.com/sirupsen/logrus v1.8.1
