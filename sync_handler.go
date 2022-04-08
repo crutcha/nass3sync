@@ -131,12 +131,16 @@ func (s *SyncHandler) Sync() error {
 				Key:    aws.String(strings.TrimPrefix(uploadKey, "/")),
 			}
 			headObjResult, headObjErr := s.s3Client.HeadObject(context.TODO(), headObjReq)
+
 			if headObjErr != nil {
 				log.Warn(fmt.Sprintf("Error with head object request to grab metadata for %s: %s", uploadKey, headObjErr))
 			}
 			// TODO: error check non-existant key?
+			// TODO: also check file size
 			localFileLastModified := headObjResult.Metadata["localfilelastmodified"]
-			if localFileInfo.ModTime().String() != localFileLastModified {
+			localFileSize := localFileInfo.Size()
+			objFileSize := headObjResult.ContentLength
+			if localFileInfo.ModTime().String() != localFileLastModified || localFileSize != objFileSize {
 				log.Info(fmt.Sprintf("%s has been modified, will update", localPath))
 				objectRequests.UploadKeys[uploadKey] = localPath
 			} else {
