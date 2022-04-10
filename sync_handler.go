@@ -118,29 +118,20 @@ func (s *SyncHandler) Sync() error {
 		pathComponents := strings.Split(localPath, s.syncConfig.SourceFolder)
 		// TODO: ensure we have at least 2 components?
 		uploadKey := pathComponents[1]
-		_, ok := s.bucketFiles[strings.TrimPrefix(uploadKey, "/")]
+		remoteObj, ok := s.bucketFiles[strings.TrimPrefix(uploadKey, "/")]
 
-		// TODO: do we need to worry about timezones or anything like that?
+		// S3 will apply it's own last modified timestamp when an object is uploaded, the timestamp from local file
+		// stat wont match. As long as the last modified timestamp from S3 for any given file/key combo is more recent
+		// than the local file last modified timestamp, S3 has the most recent copy. we could use our own metadata
+		// to track local file modification time, but this would require a HeadObject call for every file, and on
+		// a large drive/bucket, that's a ton of API calls which both slow this down considerably and cost more.
 		if !ok {
 			objectRequests.UploadKeys[uploadKey] = localPath
 			//log.Debug(fmt.Sprintf("%s does not exist in bucket, will upload with key %s", localPath, uploadKey))
-			//} else if ok && *val.LastModified != localFileLastModified {
 		} else {
-			headObjReq := &s3.HeadObjectInput{
-				Bucket: aws.String(s.syncConfig.DestinationBucket),
-				Key:    aws.String(strings.TrimPrefix(uploadKey, "/")),
-			}
-			headObjResult, headObjErr := s.s3Client.HeadObject(context.TODO(), headObjReq)
-
-			if headObjErr != nil {
-				log.Warn(fmt.Sprintf("Error with head object request to grab metadata for %s: %s", uploadKey, headObjErr))
-			}
-			// TODO: error check non-existant key?
-			// TODO: also check file size
-			localFileLastModified := headObjResult.Metadata["localfilelastmodified"]
 			localFileSize := localFileInfo.Size()
-			objFileSize := headObjResult.ContentLength
-			if localFileInfo.ModTime().String() != localFileLastModified || localFileSize != objFileSize {
+			timeSinceUpdate := remoteObj.LastModified.Sub(localFileInfo.ModTime())
+			if timeSinceUpdate < 0 || localFileSize != remoteObj.Size {
 				log.Info(fmt.Sprintf("%s has been modified, will update", localPath))
 				objectRequests.UploadKeys[uploadKey] = localPath
 			} else {
@@ -209,20 +200,12 @@ func (s *SyncHandler) uploadFile(key, filePath string, semaphore chan int, wg *s
 	}
 	defer fd.Close()
 
-	// The last modified timestamp will not match what the local filesystem has. We cant depened solely on file
-	// size to determine if a file has changed and needs to be synced again since something like photo rotation
-	// would alter the photo but the filesize would remain unchanged. We will track the local file modified time
-	// in custom metadata so we can detect cases like this.
-	localFileStat, _ := fd.Stat()
-	customMetadata := map[string]string{"localfilelastmodified": localFileStat.ModTime().String()}
-
 	log.Info(fmt.Sprintf("Uploading file %s as key %s\n", filePath, key))
 	uploader := manager.NewUploader(s.s3Client)
 	_, putErr := uploader.Upload(context.TODO(), &s3.PutObjectInput{
-		Bucket:   aws.String(s.syncConfig.DestinationBucket),
-		Key:      aws.String(strings.TrimPrefix(key, "/")),
-		Body:     fd,
-		Metadata: customMetadata,
+		Bucket: aws.String(s.syncConfig.DestinationBucket),
+		Key:    aws.String(strings.TrimPrefix(key, "/")),
+		Body:   fd,
 	})
 	<-semaphore
 
