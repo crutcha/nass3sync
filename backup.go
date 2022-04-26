@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -29,7 +30,8 @@ func tarAndUploadBackup(backupConfig BackupConfig, s3Client S3ClientHandler) {
 
 	now := time.Now()
 	backupTimestamp := now.Format(time.RFC3339)
-	backupPrefix := fmt.Sprintf("%s_%s_*.tar.gz", filepath.Base(backupConfig.SourceFolder), backupTimestamp)
+	keyBase := strings.ReplaceAll(backupConfig.SourceFolder, "/", "_")
+	backupPrefix := fmt.Sprintf("%s_%s_*.tar.gz", strings.TrimPrefix(keyBase, "_"), backupTimestamp)
 	tarFile, _ := ioutil.TempFile(os.TempDir(), backupPrefix)
 	defer os.Remove(tarFile.Name())
 
