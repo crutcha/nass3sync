@@ -46,6 +46,7 @@ func main() {
 
 	awsS3Client := s3.NewFromConfig(cfg)
 	awsSNSClient := sns.NewFromConfig(cfg)
+	s3Client := &S3Client{Client: awsS3Client}
 	scheduler := gocron.NewScheduler(time.UTC)
 
 	for _, sc := range appConfig.Sync {
@@ -63,7 +64,7 @@ func main() {
 	}
 
 	for _, bc := range appConfig.Backup {
-		bcJob, bcErr := scheduler.Cron(bc.At).Do(tarAndUploadBackup, bc, awsS3Client)
+		bcJob, bcErr := scheduler.Cron(bc.At).Do(tarAndUploadBackup, bc, s3Client)
 		if bcErr != nil {
 			log.Fatal(bcErr)
 		}
