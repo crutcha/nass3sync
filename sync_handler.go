@@ -3,18 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/aws/aws-sdk-go-v2/service/sns"
-	log "github.com/sirupsen/logrus"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
+	log "github.com/sirupsen/logrus"
 )
 
 type ObjectRequests struct {
@@ -30,14 +28,14 @@ type SyncResults struct {
 type SyncHandler struct {
 	bucketFiles map[string]types.Object
 	localFiles  map[string]os.FileInfo
-	s3Client    *s3.Client
+	s3Client    S3ClientHandler
 	snsClient   *sns.Client
 	syncConfig  SyncConfig
 	mutex       sync.Mutex
 	snsTopic    string
 }
 
-func NewSyncHandler(s3Client *s3.Client, snsClient *sns.Client, syncConfig SyncConfig, snsTopic string) *SyncHandler {
+func NewSyncHandler(s3Client S3ClientHandler, snsClient *sns.Client, syncConfig SyncConfig, snsTopic string) *SyncHandler {
 	bucketFiles := make(map[string]types.Object)
 	localFiles := make(map[string]os.FileInfo)
 	return &SyncHandler{
@@ -52,19 +50,12 @@ func NewSyncHandler(s3Client *s3.Client, snsClient *sns.Client, syncConfig SyncC
 
 func (s *SyncHandler) gatherS3Objects() error {
 	log.Info(fmt.Sprintf("Gathering S3 objects to compare from bucket %s\n", s.syncConfig.DestinationBucket))
-	listParams := &s3.ListObjectsV2Input{
-		Bucket: aws.String(s.syncConfig.DestinationBucket),
+	bucketFiles, listErr := s.s3Client.ListObjects(s.syncConfig.DestinationBucket)
+	if listErr != nil {
+		return listErr
 	}
-	paginator := s3.NewListObjectsV2Paginator(s.s3Client, listParams, func(o *s3.ListObjectsV2PaginatorOptions) {})
-	for paginator.HasMorePages() {
-		currentPage, pageErr := paginator.NextPage(context.TODO())
-		if pageErr != nil {
-			return pageErr
-		}
-		for _, object := range currentPage.Contents {
-			s.bucketFiles[*object.Key] = object
-		}
-	}
+
+	s.bucketFiles = bucketFiles
 
 	return nil
 }
@@ -127,7 +118,6 @@ func (s *SyncHandler) Sync() error {
 		// a large drive/bucket, that's a ton of API calls which both slow this down considerably and cost more.
 		if !ok {
 			objectRequests.UploadKeys[uploadKey] = localPath
-			//log.Debug(fmt.Sprintf("%s does not exist in bucket, will upload with key %s", localPath, uploadKey))
 		} else {
 			localFileSize := localFileInfo.Size()
 			timeSinceUpdate := remoteObj.LastModified.Sub(localFileInfo.ModTime())
@@ -201,50 +191,30 @@ func (s *SyncHandler) uploadFile(key, filePath string, semaphore chan int, wg *s
 	defer fd.Close()
 
 	log.Info(fmt.Sprintf("Uploading file %s as key %s\n", filePath, key))
-	uploader := manager.NewUploader(s.s3Client)
-	_, putErr := uploader.Upload(context.TODO(), &s3.PutObjectInput{
-		Bucket: aws.String(s.syncConfig.DestinationBucket),
-		Key:    aws.String(strings.TrimPrefix(key, "/")),
-		Body:   fd,
-	})
+	key = strings.TrimPrefix(key, "/")
+	uploadErr := s.s3Client.UploadFile(s.syncConfig.DestinationBucket, key, fd)
 	<-semaphore
 
-	return putErr
+	return uploadErr
 }
 
 func (s *SyncHandler) tombstoneObject(key string, semaphore chan int, wg *sync.WaitGroup) error {
 	semaphore <- 1
 	defer wg.Done()
 
-	/*
-		copyReq := &s3.CopyObjectInput{
-			CopySource: aws.String(s.syncConfig.TombstoneBucket),
-			Bucket:     aws.String(url.PathEscape(s.syncConfig.DestinationBucket)),
-			Key:        aws.String(strings.TrimPrefix(key, "/")),
-		}
-	*/
-	source := s.syncConfig.DestinationBucket + "/" + strings.TrimPrefix(key, "/")
-	copyReq := &s3.CopyObjectInput{
-		Bucket:     aws.String(s.syncConfig.TombstoneBucket),
-		CopySource: aws.String(url.PathEscape(source)),
-		Key:        aws.String(strings.TrimPrefix(key, "/")),
-	}
+	copyErr := s.s3Client.CopyObject(
+		s.syncConfig.DestinationBucket,
+		s.syncConfig.TombstoneBucket,
+		key,
+	)
 
-	_, copyErr := s.s3Client.CopyObject(context.TODO(), copyReq)
-
-	// TODO: for some reason, if we hit this error condition, wg.Wait() never returns
 	if copyErr != nil {
 		log.Warn(fmt.Sprintf("Error copying object during tombstone routine: %s", copyErr))
 		<-semaphore
 		return copyErr
 	}
 
-	delReq := &s3.DeleteObjectInput{
-		Bucket: aws.String(s.syncConfig.DestinationBucket),
-		Key:    aws.String(strings.TrimPrefix(key, "/")),
-	}
-
-	_, delErr := s.s3Client.DeleteObject(context.TODO(), delReq)
+	delErr := s.s3Client.DeleteObject(s.syncConfig.DestinationBucket, key)
 
 	if delErr != nil {
 		log.Warn(fmt.Sprintf("Error deleting original object during tombstone routine: %s", delErr))

@@ -50,7 +50,7 @@ func main() {
 	scheduler := gocron.NewScheduler(time.UTC)
 
 	for _, sc := range appConfig.Sync {
-		syncHandler := NewSyncHandler(awsS3Client, awsSNSClient, sc, appConfig.SNSTopic)
+		syncHandler := NewSyncHandler(s3Client, awsSNSClient, sc, appConfig.SNSTopic)
 		scJob, scErr := scheduler.Every(sc.Interval).Minutes().Do(syncHandler.Sync)
 		if scErr != nil {
 			log.Fatal(scErr)
