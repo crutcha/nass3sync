@@ -4,14 +4,17 @@ import (
 	"context"
 	"flag"
 	"fmt"
+
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
+
 	//"github.com/davecgh/go-spew/spew"
+	"time"
+
 	"github.com/go-co-op/gocron"
 	"github.com/jinzhu/configor"
 	log "github.com/sirupsen/logrus"
-	"time"
 )
 
 func main() {
@@ -35,7 +38,14 @@ func main() {
 		log.Fatal(configErr)
 	}
 
-	log.Info(fmt.Sprintf("config: %#v\n", appConfig))
+	//log.Info(fmt.Sprintf("config: %#v\n", appConfig))
+	log.Info("----------")
+	log.Info("Starting with Config: ")
+	for _, element := range appConfig.ConfigStringArray() {
+		log.Info(element)
+	}
+	log.Info("----------")
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithSharedConfigProfile(appConfig.IAMProfile),
 		config.WithRegion(appConfig.AWSRegion))
