@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +12,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	log "github.com/sirupsen/logrus"
+)
+
+var (
+	// TODO: is there some better way to allow for stubbing filesystem interactions for tests?
+	concreteWalkFunc = walkDirectory
 )
 
 type ObjectRequests struct {
@@ -61,13 +65,10 @@ func (s *SyncHandler) gatherS3Objects() error {
 }
 
 func (s *SyncHandler) gatherLocalFiles() error {
+	var walkErr error
 	log.Info(fmt.Sprintf("Gathering local files recursively for directory %s\n", s.syncConfig.SourceFolder))
-	walkErr := filepath.Walk(s.syncConfig.SourceFolder, func(path string, f os.FileInfo, err error) error {
-		if !f.IsDir() {
-			s.localFiles[path] = f
-		}
-		return nil
-	})
+
+	s.localFiles, walkErr = concreteWalkFunc(s.syncConfig.SourceFolder)
 	if walkErr != nil {
 		return walkErr
 	}
