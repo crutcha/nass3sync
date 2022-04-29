@@ -76,10 +76,10 @@ func (s *SyncHandler) gatherLocalFiles() error {
 	return nil
 }
 
-func (s *SyncHandler) Sync() error {
+func (s *SyncHandler) Sync() (ObjectRequests, error) {
 	if !s.mutex.TryLock() {
 		log.Info("Another sync routine is already running. Skipping.")
-		return nil
+		return ObjectRequests{}, nil
 	}
 	defer s.mutex.Unlock()
 
@@ -89,23 +89,23 @@ func (s *SyncHandler) Sync() error {
 	s.bucketFiles = make(map[string]types.Object)
 	s.localFiles = make(map[string]os.FileInfo)
 
-	log.Info(fmt.Sprintf("Starting sync routine for %s", s.syncConfig.SourceFolder))
-	syncStartTime := time.Now()
-	s3GatherErr := s.gatherS3Objects()
-	if s3GatherErr != nil {
-		return fmt.Errorf("s3gather error: %s", s3GatherErr)
-	}
-
-	localGatherErr := s.gatherLocalFiles()
-	if localGatherErr != nil {
-		return fmt.Errorf("localgather error: %s", localGatherErr)
-	}
-
-	//var objectRequests ObjectRequests
 	objectRequests := ObjectRequests{
 		TombstoneKeys: make([]string, 0),
 		UploadKeys:    make(map[string]string),
 	}
+
+	log.Info(fmt.Sprintf("Starting sync routine for %s", s.syncConfig.SourceFolder))
+	syncStartTime := time.Now()
+	s3GatherErr := s.gatherS3Objects()
+	if s3GatherErr != nil {
+		return objectRequests, fmt.Errorf("s3gather error: %s", s3GatherErr)
+	}
+
+	localGatherErr := s.gatherLocalFiles()
+	if localGatherErr != nil {
+		return objectRequests, fmt.Errorf("localgather error: %s", localGatherErr)
+	}
+
 	for localPath, localFileInfo := range s.localFiles {
 		pathComponents := strings.Split(localPath, s.syncConfig.SourceFolder)
 		// TODO: ensure we have at least 2 components?
@@ -156,7 +156,7 @@ func (s *SyncHandler) Sync() error {
 		}
 	}
 
-	return nil
+	return objectRequests, nil
 }
 
 func (s *SyncHandler) syncObjectRequests(objReqs ObjectRequests) {

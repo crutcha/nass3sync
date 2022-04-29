@@ -1,69 +1,55 @@
 package main
 
 import (
-	"fmt"
-	"io/ioutil"
 	"os"
-	"regexp"
-	"strings"
 	"testing"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/stretchr/testify/assert"
 )
 
+func createMockWalkFunc(mockResult map[string]os.FileInfo) walkFunc {
+	return func(string) (map[string]os.FileInfo, error) {
+		return mockResult, nil
+	}
+}
+
 func TestTheSyncHandler(t *testing.T) {
 	assert.True(t, true)
-	os.FileInfo{}
-}
+	now := time.Now()
 
-func TestTarAndUploadSimple(t *testing.T) {
-	mockTempDir, mockTempDirErr := ioutil.TempDir(os.TempDir(), "go-test-stuff")
-	assert.Nil(t, mockTempDirErr)
-	defer os.RemoveAll(mockTempDir)
-
-	_, tempFileErr := os.CreateTemp(mockTempDir, "fake-test-file")
-	assert.Nil(t, tempFileErr)
-
-	mockBackupConfig := BackupConfig{
-		SourceFolder:      mockTempDir,
-		DestinationBucket: "notatallarealbucket",
-		At:                "*/1 * * * *",
+	mockFileInfoResults := map[string]os.FileInfo{
+		"/folder1/folder2/not-real-file": mockFileInfo{
+			isDir:     false,
+			timestamp: time.Now(),
+		},
 	}
-	mockClient := NewMockClient()
-	keyBase := strings.TrimPrefix(strings.ReplaceAll(mockTempDir, "/", "_"), "_")
-	keyRegex := fmt.Sprintf("^%s.*\\.tar\\.gz$", keyBase)
-
-	tarAndUploadBackup(mockBackupConfig, mockClient)
-
-	assert.Len(t, mockClient.Requests, 1)
-	assert.Equal(t, *mockClient.Requests[0].Bucket, "notatallarealbucket")
-	assert.Regexp(t, regexp.MustCompile(keyRegex), *mockClient.Requests[0].Key)
-}
-
-func TestTarAndUploadNested(t *testing.T) {
-	mockTempDir, mockTempDirErr := ioutil.TempDir(os.TempDir(), "go-test-stuff")
-	assert.Nil(t, mockTempDirErr)
-	defer os.RemoveAll(mockTempDir)
-
-	nestedRelativeDir := "one/two/three"
-	nestedAbsoluteDir := fmt.Sprintf("%s/%s", mockTempDir, nestedRelativeDir)
-	mkdirAllErr := os.MkdirAll(nestedAbsoluteDir, os.ModePerm)
-	assert.Nil(t, mkdirAllErr)
-
-	_, tempFileErr := os.CreateTemp(nestedAbsoluteDir, "fake-test-file")
-	assert.Nil(t, tempFileErr)
-
-	mockBackupConfig := BackupConfig{
-		SourceFolder:      nestedAbsoluteDir,
-		DestinationBucket: "notatallarealbucket",
-		At:                "*/1 * * * *",
+	concreteWalkFunc = createMockWalkFunc(mockFileInfoResults)
+	mockBucketList := []types.Object{
+		types.Object{
+			ChecksumAlgorithm: []types.ChecksumAlgorithm{},
+			ETag:              aws.String("mock-etag"),
+			Key:               aws.String("mock-key"),
+			LastModified:      &now,
+			Owner:             &types.Owner{},
+			Size:              1,
+			//StorageClass:      types.ObjectStorageClass{},
+		},
 	}
-	mockClient := NewMockClient()
-	keyBase := strings.TrimPrefix(strings.ReplaceAll(mockTempDir, "/", "_"), "_")
-	keyRegex := fmt.Sprintf("^%s.*\\.tar\\.gz$", keyBase)
+	mockS3Client := NewMockClient(mockBucketList)
+	mockSyncConfig := SyncConfig{
+		SourceFolder:      "/folder1",
+		DestinationBucket: "not-real-bucket",
+	}
 
-	tarAndUploadBackup(mockBackupConfig, mockClient)
-	assert.Len(t, mockClient.Requests, 1)
-	assert.Equal(t, *mockClient.Requests[0].Bucket, "notatallarealbucket")
-	assert.Regexp(t, regexp.MustCompile(keyRegex), *mockClient.Requests[0].Key)
+	syncHandler := NewSyncHandler(mockS3Client, &sns.Client{}, mockSyncConfig, "")
+	syncedObjects, syncErr := syncHandler.Sync()
+
+	assert.Nil(t, syncErr)
+	assert.Len(t, syncedObjects.TombstoneKeys, 0)
+	assert.Len(t, syncedObjects.UploadKeys, 1)
+	assert.Contains(t, syncedObjects.UploadKeys, "/folder2/not-real-file")
 }

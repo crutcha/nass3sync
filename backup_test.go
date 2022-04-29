@@ -2,13 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/stretchr/testify/assert"
 )
+
+var mockedList []types.Object
 
 func TestTarAndUploadSimple(t *testing.T) {
 	mockTempDir, mockTempDirErr := ioutil.TempDir(os.TempDir(), "go-test-stuff")
@@ -23,7 +27,7 @@ func TestTarAndUploadSimple(t *testing.T) {
 		DestinationBucket: "notatallarealbucket",
 		At:                "*/1 * * * *",
 	}
-	mockClient := NewMockClient()
+	mockClient := NewMockClient(mockedList)
 	keyBase := strings.TrimPrefix(strings.ReplaceAll(mockTempDir, "/", "_"), "_")
 	keyRegex := fmt.Sprintf("^%s.*\\.tar\\.gz$", keyBase)
 
@@ -52,7 +56,7 @@ func TestTarAndUploadNested(t *testing.T) {
 		DestinationBucket: "notatallarealbucket",
 		At:                "*/1 * * * *",
 	}
-	mockClient := NewMockClient()
+	mockClient := NewMockClient(mockedList)
 	keyBase := strings.TrimPrefix(strings.ReplaceAll(mockTempDir, "/", "_"), "_")
 	keyRegex := fmt.Sprintf("^%s.*\\.tar\\.gz$", keyBase)
 
