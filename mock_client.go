@@ -1,9 +1,10 @@
 package main
 
 import (
+	"os"
+
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"os"
 )
 
 type MockS3Client struct {
@@ -24,8 +25,12 @@ func (s *MockS3Client) PutObject(request *s3.PutObjectInput, file *os.File) erro
 }
 
 func (s *MockS3Client) ListObjects(string) (map[string]types.Object, error) {
-	fakeMap := make(map[string]types.Object)
-	return fakeMap, nil
+	mockListMap := make(map[string]types.Object)
+	for _, obj := range s.mockList {
+		mockListMap[*obj.Key] = obj
+	}
+
+	return mockListMap, nil
 }
 
 func (s *MockS3Client) CopyObject(sourceBucket string, destinationBucket string, key string) error {
