@@ -69,7 +69,7 @@ func NewSyncHandler(s3Client S3ClientHandler, snsClient *sns.Client, syncConfig 
 }
 
 func (s *SyncHandler) gatherS3Objects() error {
-	log.Info(fmt.Sprintf("Gathering S3 objects to compare from bucket %s\n", s.syncConfig.DestinationBucket))
+	log.Info(fmt.Sprintf("Gathering S3 objects to compare from bucket %s", s.syncConfig.DestinationBucket))
 	bucketFiles, listErr := s.s3Client.ListObjects(s.syncConfig.DestinationBucket)
 	if listErr != nil {
 		return listErr
@@ -82,7 +82,7 @@ func (s *SyncHandler) gatherS3Objects() error {
 
 func (s *SyncHandler) gatherLocalFiles() error {
 	var walkErr error
-	log.Info(fmt.Sprintf("Gathering local files recursively for directory %s\n", s.syncConfig.SourceFolder))
+	log.Info(fmt.Sprintf("Gathering local files recursively for directory %s", s.syncConfig.SourceFolder))
 
 	s.localFiles, walkErr = concreteWalkFunc(s.syncConfig.SourceFolder)
 	if walkErr != nil {
@@ -169,7 +169,7 @@ func (s *SyncHandler) Sync() (ObjectRequests, error) {
 	s.syncObjectRequests(objectRequests)
 	syncEndTime := time.Now()
 	duration := syncEndTime.Sub(syncStartTime)
-	log.Info(fmt.Sprintf("Sync complete. Took %s\n", duration.String()))
+	log.Info(fmt.Sprintf("Sync complete. Took %s", duration.String()))
 
 	if s.snsTopic != "" {
 		notifyErr := notifySyncResultsViaSns(s.snsClient, s.snsTopic, objectRequests)
@@ -214,7 +214,7 @@ func (s *SyncHandler) uploadFile(key, filePath string, semaphore chan int, wg *s
 	}
 	defer fd.Close()
 
-	log.Info(fmt.Sprintf("Uploading file %s as key %s\n", filePath, key))
+	log.Info(fmt.Sprintf("Uploading file %s as key %s", filePath, key))
 	key = strings.TrimPrefix(key, "/")
 	uploadErr := s.s3Client.UploadFile(s.syncConfig.DestinationBucket, key, fd)
 	<-semaphore
