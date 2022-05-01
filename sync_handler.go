@@ -169,7 +169,7 @@ func (s *SyncHandler) Sync() (ObjectRequests, error) {
 	s.syncObjectRequests(objectRequests)
 	syncEndTime := time.Now()
 	duration := syncEndTime.Sub(syncStartTime)
-	log.Info(fmt.Sprintf("Sync complete. Took %s", duration.String()))
+	log.Info(fmt.Sprintf("Sync complete for %s. Took %s", s.syncConfig.SourceFolder, duration.String()))
 
 	if s.snsTopic != "" {
 		notifyErr := notifySyncResultsViaSns(s.snsClient, s.snsTopic, objectRequests)
