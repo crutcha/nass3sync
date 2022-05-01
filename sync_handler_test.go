@@ -136,3 +136,32 @@ func TestBucketFileNotOnLocalFS(t *testing.T) {
 	assert.Len(t, syncedObjects.UploadKeys, 0)
 	assert.Contains(t, syncedObjects.TombstoneKeys, "/folder2/not-real-file")
 }
+
+func TestFilesMatchingExclusionNotUploaded(t *testing.T) {
+	mockFileInfoResults := map[string]os.FileInfo{
+		"/folder1/folder2/not-real-file": mockFileInfo{
+			isDir:     false,
+			timestamp: time.Now(),
+		},
+		"/folder1/folder2/somewhat-real-file": mockFileInfo{
+			isDir:     false,
+			timestamp: time.Now(),
+		},
+	}
+	concreteWalkFunc = createMockWalkFunc(mockFileInfoResults)
+	mockS3Client := NewMockClient([]types.Object{})
+	mockSyncConfig := SyncConfig{
+		SourceFolder:      "/folder1",
+		DestinationBucket: "not-real-bucket",
+		Exclude:           []string{"/folder1/.*/not-real-file"},
+	}
+
+	syncHandler := NewSyncHandler(mockS3Client, &sns.Client{}, mockSyncConfig, "")
+	syncedObjects, syncErr := syncHandler.Sync()
+
+	assert.Nil(t, syncErr)
+	assert.Len(t, syncedObjects.TombstoneKeys, 0)
+	assert.Len(t, syncedObjects.UploadKeys, 1)
+	assert.Contains(t, syncedObjects.UploadKeys, "/folder2/somewhat-real-file")
+	assert.NotContains(t, syncedObjects.UploadKeys, "/folder2/not-real-file")
+}

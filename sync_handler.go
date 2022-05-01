@@ -31,13 +31,16 @@ type SyncResults struct {
 }
 
 type SyncHandler struct {
-	bucketFiles   map[string]types.Object
-	localFiles    map[string]os.FileInfo
-	s3Client      S3ClientHandler
-	snsClient     *sns.Client
-	syncConfig    SyncConfig
-	mutex         sync.Mutex
-	snsTopic      string
+	bucketFiles map[string]types.Object
+	localFiles  map[string]os.FileInfo
+	s3Client    S3ClientHandler
+	snsClient   *sns.Client
+	syncConfig  SyncConfig
+	mutex       sync.Mutex
+	snsTopic    string
+
+	// TODO: for now with a small number of exclusion matchers, this OK, but we should figure out
+	// a more efficient way to do this to handle a larger amount of exception patterns
 	exclusionExpr *regexp.Regexp
 	hasExclusion  bool
 }
@@ -120,9 +123,6 @@ func (s *SyncHandler) Sync() (ObjectRequests, error) {
 	}
 
 	for localPath, localFileInfo := range s.localFiles {
-		if strings.Contains(localPath, "sessions.json") {
-			fmt.Println("debug time")
-		}
 		isExcluded := s.hasExclusion && s.exclusionExpr.MatchString(localPath)
 		if isExcluded {
 			log.Info(fmt.Sprintf("%s matches exclusion list. skipping...", localPath))
