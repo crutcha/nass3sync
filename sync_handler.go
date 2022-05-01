@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -25,30 +26,42 @@ type ObjectRequests struct {
 }
 
 type SyncResults struct {
-	Key    string
-	Result string
+	Tombstone sync.Map
+	Upload    sync.Map
 }
 
 type SyncHandler struct {
-	bucketFiles map[string]types.Object
-	localFiles  map[string]os.FileInfo
-	s3Client    S3ClientHandler
-	snsClient   *sns.Client
-	syncConfig  SyncConfig
-	mutex       sync.Mutex
-	snsTopic    string
+	bucketFiles   map[string]types.Object
+	localFiles    map[string]os.FileInfo
+	s3Client      S3ClientHandler
+	snsClient     *sns.Client
+	syncConfig    SyncConfig
+	mutex         sync.Mutex
+	snsTopic      string
+	exclusionExpr *regexp.Regexp
+	hasExclusion  bool
 }
 
 func NewSyncHandler(s3Client S3ClientHandler, snsClient *sns.Client, syncConfig SyncConfig, snsTopic string) *SyncHandler {
 	bucketFiles := make(map[string]types.Object)
 	localFiles := make(map[string]os.FileInfo)
+
+	hasExclusionExpr := len(syncConfig.Exclude) != 0
+	regexStr := strings.Join(syncConfig.Exclude, "|")
+	exclude, excludeErr := regexp.Compile(regexStr)
+	if excludeErr != nil {
+		log.Fatalf("Error creating exclusion list: %s", excludeErr)
+	}
+
 	return &SyncHandler{
-		bucketFiles: bucketFiles,
-		localFiles:  localFiles,
-		s3Client:    s3Client,
-		snsClient:   snsClient,
-		syncConfig:  syncConfig,
-		snsTopic:    snsTopic,
+		bucketFiles:   bucketFiles,
+		localFiles:    localFiles,
+		s3Client:      s3Client,
+		snsClient:     snsClient,
+		syncConfig:    syncConfig,
+		snsTopic:      snsTopic,
+		exclusionExpr: exclude,
+		hasExclusion:  hasExclusionExpr,
 	}
 }
 
@@ -107,6 +120,15 @@ func (s *SyncHandler) Sync() (ObjectRequests, error) {
 	}
 
 	for localPath, localFileInfo := range s.localFiles {
+		if strings.Contains(localPath, "sessions.json") {
+			fmt.Println("debug time")
+		}
+		isExcluded := s.hasExclusion && s.exclusionExpr.MatchString(localPath)
+		if isExcluded {
+			log.Info(fmt.Sprintf("%s matches exclusion list. skipping...", localPath))
+			continue
+		}
+
 		pathComponents := strings.Split(localPath, s.syncConfig.SourceFolder)
 		// TODO: ensure we have at least 2 components?
 		uploadKey := pathComponents[1]
@@ -159,7 +181,7 @@ func (s *SyncHandler) Sync() (ObjectRequests, error) {
 	return objectRequests, nil
 }
 
-func (s *SyncHandler) syncObjectRequests(objReqs ObjectRequests) {
+func (s *SyncHandler) syncObjectRequests(objReqs ObjectRequests) SyncResults {
 	// TODO: from app config
 	semaphore := make(chan int, 5)
 	var wg sync.WaitGroup
@@ -178,6 +200,7 @@ func (s *SyncHandler) syncObjectRequests(objReqs ObjectRequests) {
 	}
 
 	wg.Wait()
+	return SyncResults{}
 }
 
 func (s *SyncHandler) uploadFile(key, filePath string, semaphore chan int, wg *sync.WaitGroup) error {

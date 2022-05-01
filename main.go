@@ -38,7 +38,6 @@ func main() {
 		log.Fatal(configErr)
 	}
 
-	//log.Info(fmt.Sprintf("config: %#v\n", appConfig))
 	log.Info("----------")
 	log.Info("Starting with Config: ")
 	for _, element := range appConfig.ConfigStringArray() {

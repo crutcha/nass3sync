@@ -16,6 +16,7 @@ type SyncConfig struct {
 	DestinationBucket string `required:"true"`
 	TombstoneBucket   string
 	Interval          int `required:"true"`
+	Exclude           []string
 }
 
 type BackupConfig struct {
