@@ -59,10 +59,16 @@ func main() {
 	scheduler := gocron.NewScheduler(time.UTC)
 
 	for _, sc := range appConfig.Sync {
-		syncHandler := NewSyncHandler(s3Client, awsSNSClient, sc, appConfig.SNSTopic)
-		scJob, scErr := scheduler.Every(sc.Interval).Minutes().Do(syncHandler.Sync)
+		syncHandler := NewS3SyncHandler(s3Client, awsSNSClient, appConfig.SNSTopic)
+		scJob, scErr := scheduler.Every(sc.Interval).Minutes().Do(
+			syncHandler.Sync,
+			sc.SourceFolder,
+			sc.DestinationBucket,
+			sc.TombstoneBucket,
+			sc.Exclude,
+		)
 		if scErr != nil {
-			log.Fatal(scErr)
+			log.Fatal(fmt.Errorf("Error setting up sync job for %s: %s", sc.SourceFolder, scErr))
 		}
 		logString := fmt.Sprintf(
 			"Scheduled sync for folder %s. Next run at: %s",
@@ -73,7 +79,8 @@ func main() {
 	}
 
 	for _, bc := range appConfig.Backup {
-		bcJob, bcErr := scheduler.Cron(bc.At).Do(tarAndUploadBackup, bc, s3Client)
+		syncHandler := NewS3SyncHandler(s3Client, awsSNSClient, appConfig.SNSTopic)
+		bcJob, bcErr := scheduler.Cron(bc.At).Do(syncHandler.Backup, bc.SourceFolder, bc.DestinationBucket)
 		if bcErr != nil {
 			log.Fatal(bcErr)
 		}
