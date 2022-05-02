@@ -33,7 +33,7 @@ type SyncResults struct {
 type SyncHandler struct {
 	bucketFiles map[string]types.Object
 	localFiles  map[string]os.FileInfo
-	s3Client    S3ClientHandler
+	s3Client    BucketClient
 	snsClient   *sns.Client
 	syncConfig  SyncConfig
 	mutex       sync.Mutex
@@ -45,7 +45,7 @@ type SyncHandler struct {
 	hasExclusion  bool
 }
 
-func NewSyncHandler(s3Client S3ClientHandler, snsClient *sns.Client, syncConfig SyncConfig, snsTopic string) *SyncHandler {
+func NewSyncHandler(s3Client BucketClient, snsClient *sns.Client, syncConfig SyncConfig, snsTopic string) *SyncHandler {
 	bucketFiles := make(map[string]types.Object)
 	localFiles := make(map[string]os.FileInfo)
 

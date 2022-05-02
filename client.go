@@ -2,18 +2,17 @@ package main
 
 import (
 	"context"
+	"net/url"
+	"os"
+	"strings"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"net/url"
-	"os"
-	"strings"
 )
 
-type S3ClientHandler interface {
-	// TODO: dont expect caller to assemble putobjectinput here
-	PutObject(*s3.PutObjectInput, *os.File) error
+type BucketClient interface {
 	ListObjects(string) (map[string]types.Object, error)
 	UploadFile(bucketName string, key string, file *os.File) error
 	CopyObject(sourceBucket string, destinationBucket string, key string) error

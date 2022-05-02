@@ -4,18 +4,17 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
-func tarAndUploadBackup(backupConfig BackupConfig, s3Client S3ClientHandler) {
+func tarAndUploadBackup(backupConfig BackupConfig, bucketClient BucketClient) {
 	// TODO: move file walk into util that returns list of paths
 	filesToCompress := make([]string, 0)
 	walkErr := filepath.Walk(backupConfig.SourceFolder, func(path string, f os.FileInfo, err error) error {
@@ -49,12 +48,7 @@ func tarAndUploadBackup(backupConfig BackupConfig, s3Client S3ClientHandler) {
 	defer uploadFile.Close()
 
 	fileKey := filepath.Base(tarFile.Name())
-	putRequest := &s3.PutObjectInput{
-		Bucket: aws.String(backupConfig.DestinationBucket),
-		Key:    aws.String(fileKey),
-		Body:   uploadFile,
-	}
-	putErr := s3Client.PutObject(putRequest, uploadFile)
+	putErr := bucketClient.UploadFile(backupConfig.DestinationBucket, fileKey, uploadFile)
 	if putErr != nil {
 		log.Warn("Backup upload error: ", putErr)
 	} else {
