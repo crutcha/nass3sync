@@ -165,3 +165,25 @@ func TestFilesMatchingExclusionNotUploaded(t *testing.T) {
 	assert.Contains(t, syncedObjects.UploadKeys, "/folder2/somewhat-real-file")
 	assert.NotContains(t, syncedObjects.UploadKeys, "/folder2/not-real-file")
 }
+
+func TestSyncRoutineErrosWhenAnotherIsRunning(t *testing.T) {
+	mockFileInfoResults := make(map[string]os.FileInfo)
+	concreteWalkFunc = createMockWalkFunc(mockFileInfoResults)
+	mockS3Client := NewMockClient([]types.Object{})
+	mockSyncConfig := SyncConfig{
+		SourceFolder:      "/folder1",
+		DestinationBucket: "not-real-bucket",
+		Exclude:           []string{"/folder1/.*/not-real-file"},
+	}
+
+	lock := &sync.Mutex{}
+	lock.Lock()
+	defer lock.Unlock()
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
+
+	assert.NotNil(t, syncErr)
+	assert.ErrorContains(t, syncErr, "Unable to acquire sync lock")
+	assert.Len(t, mockS3Client.UploadRequests, 0)
+	assert.Len(t, syncedObjects.TombstoneKeys, 0)
+	assert.Len(t, syncedObjects.UploadKeys, 0)
+}

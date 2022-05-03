@@ -9,15 +9,18 @@ import (
 )
 
 type AppConfig struct {
-	Provider    string `required:"true"`
-	AWSRegion   string `required:"true"`
-	IAMProfile  string
+	Provider    CloudProviderConfig
 	Concurrency int `default:"1"`
 	Sync        []SyncConfig
 	Backup      []BackupConfig
 	SNSTopic    string
 }
 
+type CloudProviderConfig struct {
+	Name    string `required:"true"`
+	Profile string
+	Region  string `required:"true"`
+}
 type SyncConfig struct {
 	SourceFolder      string `required:"true"`
 	DestinationBucket string `required:"true"`
@@ -35,11 +38,11 @@ type BackupConfig struct {
 func (c AppConfig) ClientFromConfig() (BucketClient, error) {
 	var bucketClient BucketClient
 
-	switch c.Provider {
+	switch c.Provider.Name {
 	case "aws":
 		cfg, err := config.LoadDefaultConfig(context.TODO(),
-			config.WithSharedConfigProfile(c.IAMProfile),
-			config.WithRegion(c.AWSRegion))
+			config.WithSharedConfigProfile(c.Provider.Profile),
+			config.WithRegion(c.Provider.Region))
 		if err != nil {
 			return bucketClient, fmt.Errorf("Error creating s3 client: %+v\n", err)
 		}
@@ -54,8 +57,8 @@ func (c AppConfig) ClientFromConfig() (BucketClient, error) {
 
 func (c AppConfig) ConfigStringArray() []string {
 	configStrArr := make([]string, 0)
-	configStrArr = append(configStrArr, fmt.Sprintf("  - AWSRegion: %s", c.AWSRegion))
-	configStrArr = append(configStrArr, fmt.Sprintf("  - IAMProfile: %s", c.IAMProfile))
+	configStrArr = append(configStrArr, fmt.Sprintf("  - Region: %s", c.Provider.Region))
+	configStrArr = append(configStrArr, fmt.Sprintf("  - IAMProfile: %s", c.Provider.Profile))
 	configStrArr = append(configStrArr, fmt.Sprintf("  - Concurrent Uploads: %d", c.Concurrency))
 
 	if c.SNSTopic != "" {

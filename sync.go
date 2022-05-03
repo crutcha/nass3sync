@@ -28,12 +28,10 @@ type ObjectRequests struct {
 
 func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) (ObjectRequests, error) {
 	if !lock.TryLock() {
-		log.Info("Another sync routine is already running. Skipping.")
-		return ObjectRequests{}, nil
+		log.Warn("Another sync routine is already running. Skipping.")
+		return ObjectRequests{}, fmt.Errorf("Unable to acquire sync lock")
 	}
 	defer lock.Unlock()
-
-	log.Info(fmt.Sprintf("Starting sync routine for %s", sc.SourceFolder))
 	syncStartTime := time.Now()
 
 	// TODO: for now with a small number of exclusion matchers, this OK, but we should figure out
