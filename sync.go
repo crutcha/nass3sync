@@ -26,15 +26,12 @@ type ObjectRequests struct {
 	UploadKeys    map[string]string
 }
 
-func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) {
-	fmt.Printf("LOCKING: %+v\n", sc)
+func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) (ObjectRequests, error) {
 	if !lock.TryLock() {
 		log.Info("Another sync routine is already running. Skipping.")
-		return
-		//return ObjectRequests{}, nil
+		return ObjectRequests{}, nil
 	}
 	defer lock.Unlock()
-	fmt.Printf("AFTER LOCK %+v\n", sc)
 
 	log.Info(fmt.Sprintf("Starting sync routine for %s", sc.SourceFolder))
 	syncStartTime := time.Now()
@@ -54,13 +51,11 @@ func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) {
 	// the state from the last time it ran
 	bucketFiles, listBucketErr := client.ListObjects(sc.DestinationBucket)
 	if listBucketErr != nil {
-		//return objectRequests, fmt.Errorf("Error listing S3 bucket: %s", listBucketErr)
-		return
+		return objectRequests, fmt.Errorf("Error listing S3 bucket: %s", listBucketErr)
 	}
 	localFiles, listLocalFilesErr := concreteWalkFunc(sc.SourceFolder)
 	if listLocalFilesErr != nil {
-		//return objectRequests, fmt.Errorf("Error walking local directory: %s", listLocalFilesErr)
-		return
+		return objectRequests, fmt.Errorf("Error walking local directory: %s", listLocalFilesErr)
 	}
 
 	for localPath, localFileInfo := range localFiles {
@@ -121,7 +116,7 @@ func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) {
 		}
 	*/
 
-	//return objectRequests, nil
+	return objectRequests, nil
 }
 
 func syncObjectRequests(client BucketClient, objReqs ObjectRequests, destBucket, tombstoneBucket string) {

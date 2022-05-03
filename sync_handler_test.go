@@ -2,12 +2,12 @@ package main
 
 import (
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,8 +31,8 @@ func TestLocalFileNotInBucket(t *testing.T) {
 		DestinationBucket: "not-real-bucket",
 	}
 
-	syncHandler := NewSyncHandler(mockS3Client, &sns.Client{}, mockSyncConfig, "")
-	syncedObjects, syncErr := syncHandler.Sync()
+	lock := &sync.Mutex{}
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
 
 	assert.Nil(t, syncErr)
 	assert.Len(t, syncedObjects.TombstoneKeys, 0)
@@ -66,8 +66,8 @@ func TestLocalFileIsOlder(t *testing.T) {
 		DestinationBucket: "not-real-bucket",
 	}
 
-	syncHandler := NewSyncHandler(mockS3Client, &sns.Client{}, mockSyncConfig, "")
-	syncedObjects, syncErr := syncHandler.Sync()
+	lock := &sync.Mutex{}
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
 
 	assert.Nil(t, syncErr)
 	assert.Len(t, syncedObjects.TombstoneKeys, 0)
@@ -99,8 +99,8 @@ func TestLocalFileIsNewer(t *testing.T) {
 		DestinationBucket: "not-real-bucket",
 	}
 
-	syncHandler := NewSyncHandler(mockS3Client, &sns.Client{}, mockSyncConfig, "")
-	syncedObjects, syncErr := syncHandler.Sync()
+	lock := &sync.Mutex{}
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
 
 	assert.Nil(t, syncErr)
 	assert.Len(t, syncedObjects.TombstoneKeys, 0)
@@ -128,8 +128,8 @@ func TestBucketFileNotOnLocalFS(t *testing.T) {
 		DestinationBucket: "not-real-bucket",
 	}
 
-	syncHandler := NewSyncHandler(mockS3Client, &sns.Client{}, mockSyncConfig, "")
-	syncedObjects, syncErr := syncHandler.Sync()
+	lock := &sync.Mutex{}
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
 
 	assert.Nil(t, syncErr)
 	assert.Len(t, syncedObjects.TombstoneKeys, 1)
@@ -156,8 +156,8 @@ func TestFilesMatchingExclusionNotUploaded(t *testing.T) {
 		Exclude:           []string{"/folder1/.*/not-real-file"},
 	}
 
-	syncHandler := NewSyncHandler(mockS3Client, &sns.Client{}, mockSyncConfig, "")
-	syncedObjects, syncErr := syncHandler.Sync()
+	lock := &sync.Mutex{}
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
 
 	assert.Nil(t, syncErr)
 	assert.Len(t, syncedObjects.TombstoneKeys, 0)

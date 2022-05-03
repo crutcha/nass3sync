@@ -31,11 +31,11 @@ func TestTarAndUploadSimple(t *testing.T) {
 	keyBase := strings.TrimPrefix(strings.ReplaceAll(mockTempDir, "/", "_"), "_")
 	keyRegex := fmt.Sprintf("^%s.*\\.tar\\.gz$", keyBase)
 
-	tarAndUploadBackup(mockBackupConfig, mockClient)
+	doBackup(mockClient, mockBackupConfig)
 
-	assert.Len(t, mockClient.Requests, 1)
-	assert.Equal(t, *mockClient.Requests[0].Bucket, "notatallarealbucket")
-	assert.Regexp(t, regexp.MustCompile(keyRegex), *mockClient.Requests[0].Key)
+	assert.Len(t, mockClient.UploadRequests, 1)
+	assert.Equal(t, mockClient.UploadRequests[0].Bucket, "notatallarealbucket")
+	assert.Regexp(t, regexp.MustCompile(keyRegex), mockClient.UploadRequests[0].Key)
 }
 
 func TestTarAndUploadNested(t *testing.T) {
@@ -60,8 +60,8 @@ func TestTarAndUploadNested(t *testing.T) {
 	keyBase := strings.TrimPrefix(strings.ReplaceAll(mockTempDir, "/", "_"), "_")
 	keyRegex := fmt.Sprintf("^%s.*\\.tar\\.gz$", keyBase)
 
-	tarAndUploadBackup(mockBackupConfig, mockClient)
-	assert.Len(t, mockClient.Requests, 1)
-	assert.Equal(t, *mockClient.Requests[0].Bucket, "notatallarealbucket")
-	assert.Regexp(t, regexp.MustCompile(keyRegex), *mockClient.Requests[0].Key)
+	doBackup(mockClient, mockBackupConfig)
+	assert.Len(t, mockClient.UploadRequests, 1)
+	assert.Equal(t, mockClient.UploadRequests[0].Bucket, "notatallarealbucket")
+	assert.Regexp(t, regexp.MustCompile(keyRegex), mockClient.UploadRequests[0].Key)
 }

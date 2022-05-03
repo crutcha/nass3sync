@@ -23,12 +23,6 @@ type S3Client struct {
 	Client *s3.Client
 }
 
-func (s *S3Client) PutObject(putReq *s3.PutObjectInput, file *os.File) error {
-	uploader := manager.NewUploader(s.Client)
-	_, putErr := uploader.Upload(context.TODO(), putReq)
-	return putErr
-}
-
 func (s *S3Client) ListObjects(bucketName string) (map[string]types.Object, error) {
 	bucketFiles := make(map[string]types.Object)
 	listParams := &s3.ListObjectsV2Input{
