@@ -1,13 +1,9 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
-
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/sns"
+	"sync"
 
 	//"github.com/davecgh/go-spew/spew"
 	"time"
@@ -45,27 +41,21 @@ func main() {
 	}
 	log.Info("----------")
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithSharedConfigProfile(appConfig.IAMProfile),
-		config.WithRegion(appConfig.AWSRegion))
-
-	if err != nil {
-		log.Fatal(fmt.Errorf("Error creating s3 client: %+v\n", err))
+	bucketClient, clientErr := appConfig.ClientFromConfig()
+	if clientErr != nil {
+		log.Fatalf("Error creating bucket client from config: %s", clientErr)
 	}
 
-	awsS3Client := s3.NewFromConfig(cfg)
-	awsSNSClient := sns.NewFromConfig(cfg)
-	s3Client := &S3Client{Client: awsS3Client}
 	scheduler := gocron.NewScheduler(time.UTC)
 
 	for _, sc := range appConfig.Sync {
-		syncHandler := NewS3SyncHandler(s3Client, awsSNSClient, appConfig.SNSTopic)
+		syncLock := &sync.Mutex{}
+		//var syncLock sync.Mutex
 		scJob, scErr := scheduler.Every(sc.Interval).Minutes().Do(
-			syncHandler.Sync,
-			sc.SourceFolder,
-			sc.DestinationBucket,
-			sc.TombstoneBucket,
-			sc.Exclude,
+			doSync,
+			bucketClient,
+			sc,
+			syncLock,
 		)
 		if scErr != nil {
 			log.Fatal(fmt.Errorf("Error setting up sync job for %s: %s", sc.SourceFolder, scErr))
@@ -79,8 +69,7 @@ func main() {
 	}
 
 	for _, bc := range appConfig.Backup {
-		syncHandler := NewS3SyncHandler(s3Client, awsSNSClient, appConfig.SNSTopic)
-		bcJob, bcErr := scheduler.Cron(bc.At).Do(syncHandler.Backup, bc.SourceFolder, bc.DestinationBucket)
+		bcJob, bcErr := scheduler.Cron(bc.At).Do(doBackup, bucketClient, bc)
 		if bcErr != nil {
 			log.Fatal(bcErr)
 		}

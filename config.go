@@ -1,8 +1,15 @@
 package main
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+)
 
 type AppConfig struct {
+	Provider    string `required:"true"`
 	AWSRegion   string `required:"true"`
 	IAMProfile  string
 	Concurrency int `default:"1"`
@@ -23,6 +30,26 @@ type BackupConfig struct {
 	SourceFolder      string `required:"true"`
 	DestinationBucket string `required:"true"`
 	At                string `required:"true"`
+}
+
+func (c AppConfig) ClientFromConfig() (BucketClient, error) {
+	var bucketClient BucketClient
+
+	switch c.Provider {
+	case "aws":
+		cfg, err := config.LoadDefaultConfig(context.TODO(),
+			config.WithSharedConfigProfile(c.IAMProfile),
+			config.WithRegion(c.AWSRegion))
+		if err != nil {
+			return bucketClient, fmt.Errorf("Error creating s3 client: %+v\n", err)
+		}
+		awsS3Client := s3.NewFromConfig(cfg)
+		bucketClient = &S3Client{Client: awsS3Client}
+	default:
+		return bucketClient, fmt.Errorf("Unknown cloud provider: %s", c.Provider)
+	}
+
+	return bucketClient, nil
 }
 
 func (c AppConfig) ConfigStringArray() []string {
