@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	log "github.com/sirupsen/logrus"
 )
@@ -26,10 +27,40 @@ type ObjectRequests struct {
 	UploadKeys    map[string]string
 }
 
-func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) (ObjectRequests, error) {
+/*
+type UploadResult struct {
+	Upload    sync.Map
+	Tombstone sync.Map
+}
+*/
+
+type ResultMap struct {
+	Upload    map[string]error
+	Tombstone map[string]error
+	lock      *sync.Mutex
+}
+
+func (r *ResultMap) AddUploadResult(key string, result error) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.Upload[key] = result
+}
+
+func (r *ResultMap) AddTombstoneResult(key string, result error) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.Tombstone[key] = result
+}
+
+func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) (*ResultMap, error) {
+	resultMap := &ResultMap{
+		Upload:    make(map[string]error),
+		Tombstone: make(map[string]error),
+		lock:      new(sync.Mutex),
+	}
 	if !lock.TryLock() {
 		log.Warn("Another sync routine is already running. Skipping.")
-		return ObjectRequests{}, fmt.Errorf("Unable to acquire sync lock")
+		return resultMap, fmt.Errorf("Unable to acquire sync lock")
 	}
 	defer lock.Unlock()
 	syncStartTime := time.Now()
@@ -49,11 +80,11 @@ func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) (ObjectRequest
 	// the state from the last time it ran
 	bucketFiles, listBucketErr := client.ListObjects(sc.DestinationBucket)
 	if listBucketErr != nil {
-		return objectRequests, fmt.Errorf("Error listing S3 bucket: %s", listBucketErr)
+		return resultMap, fmt.Errorf("Error listing S3 bucket: %s", listBucketErr)
 	}
 	localFiles, listLocalFilesErr := concreteWalkFunc(sc.SourceFolder)
 	if listLocalFilesErr != nil {
-		return objectRequests, fmt.Errorf("Error walking local directory: %s", listLocalFilesErr)
+		return resultMap, fmt.Errorf("Error walking local directory: %s", listLocalFilesErr)
 	}
 
 	for localPath, localFileInfo := range localFiles {
@@ -100,7 +131,7 @@ func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) (ObjectRequest
 		}
 	}
 
-	syncObjectRequests(client, objectRequests, sc.DestinationBucket, sc.TombstoneBucket)
+	syncObjectRequests(client, objectRequests, resultMap, sc.DestinationBucket, sc.TombstoneBucket)
 	syncEndTime := time.Now()
 	duration := syncEndTime.Sub(syncStartTime)
 	log.Info(fmt.Sprintf("Sync complete for %s. Took %s", sc.SourceFolder, duration.String()))
@@ -113,24 +144,25 @@ func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) (ObjectRequest
 			}
 		}
 	*/
+	notifySyncResultsViaSns(resultMap)
 
-	return objectRequests, nil
+	return resultMap, nil
 }
 
-func syncObjectRequests(client BucketClient, objReqs ObjectRequests, destBucket, tombstoneBucket string) {
+func syncObjectRequests(client BucketClient, objReqs ObjectRequests, resultMap *ResultMap, destBucket, tombstoneBucket string) {
 	// TODO: from app config
 	semaphore := make(chan int, 5)
 	var wg sync.WaitGroup
 
 	for fileKey, fileInfo := range objReqs.UploadKeys {
 		wg.Add(1)
-		go doUploadFile(client, destBucket, fileKey, fileInfo, semaphore, &wg)
+		go doUploadFile(client, destBucket, fileKey, fileInfo, semaphore, &wg, resultMap)
 	}
 
 	if tombstoneBucket != "" {
 		for _, key := range objReqs.TombstoneKeys {
 			wg.Add(1)
-			go doTombstoneObject(client, destBucket, tombstoneBucket, key, semaphore, &wg)
+			go doTombstoneObject(client, destBucket, tombstoneBucket, key, semaphore, &wg, resultMap)
 		}
 	}
 
@@ -138,12 +170,20 @@ func syncObjectRequests(client BucketClient, objReqs ObjectRequests, destBucket,
 	//return SyncResults{}
 }
 
-func doUploadFile(client BucketClient, bucket, key, filePath string, semaphore chan int, wg *sync.WaitGroup) error {
+func doUploadFile(
+	client BucketClient,
+	bucket, key, filePath string,
+	semaphore chan int,
+	wg *sync.WaitGroup,
+	resultMap *ResultMap,
+) error {
+	resultMap.AddUploadResult(key, nil)
 	semaphore <- 1
 	defer wg.Done()
 
 	fd, fileErr := os.Open(filePath)
 	if fileErr != nil {
+		resultMap.AddUploadResult(key, fileErr)
 		<-semaphore
 		return fileErr
 	}
@@ -157,7 +197,14 @@ func doUploadFile(client BucketClient, bucket, key, filePath string, semaphore c
 	return uploadErr
 }
 
-func doTombstoneObject(client BucketClient, sourceBucket, destinationBucket, key string, semaphore chan int, wg *sync.WaitGroup) error {
+func doTombstoneObject(
+	client BucketClient,
+	sourceBucket, destinationBucket, key string,
+	semaphore chan int,
+	wg *sync.WaitGroup,
+	resultMap *ResultMap,
+) error {
+	resultMap.AddTombstoneResult(key, nil)
 	semaphore <- 1
 	defer wg.Done()
 
@@ -165,6 +212,7 @@ func doTombstoneObject(client BucketClient, sourceBucket, destinationBucket, key
 
 	if copyErr != nil {
 		log.Warn(fmt.Sprintf("Error copying object during tombstone routine: %s", copyErr))
+		resultMap.AddTombstoneResult(key, copyErr)
 		<-semaphore
 		return copyErr
 	}
@@ -173,6 +221,7 @@ func doTombstoneObject(client BucketClient, sourceBucket, destinationBucket, key
 
 	if delErr != nil {
 		log.Warn(fmt.Sprintf("Error deleting original object during tombstone routine: %s", delErr))
+		resultMap.AddTombstoneResult(key, delErr)
 		<-semaphore
 		return delErr
 	}
@@ -225,25 +274,33 @@ func doBackup(client BucketClient, bc BackupConfig) {
 
 // TODO: this doesn't actually capture if upload or tombstone operations were successful or
 // returned an error. need to update this func to accomodate for each individual key result.
-func notifySyncResultsViaSns(snsClient *sns.Client, snsTopic string, objectRequests ObjectRequests) error {
+func notifySyncResultsViaSns(resultMap *ResultMap) error {
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithSharedConfigProfile("nass3sync"),
+		config.WithRegion("us-east-2"))
+
+	fmt.Println(err)
+	snsClient := sns.NewFromConfig(cfg)
+
+	requiresNotification := len(resultMap.Tombstone) != 0 || len(resultMap.Upload) != 0
 	// we only want to notify if something actually happened
-	if len(objectRequests.TombstoneKeys) == 0 && len(objectRequests.UploadKeys) == 0 {
+	if !requiresNotification {
 		return nil
 	}
 
 	notificationBody := "Uploads:\n"
-	for _, upload := range objectRequests.UploadKeys {
-		notificationBody += fmt.Sprintf("  - %s\n", upload)
+	for key, uploadErr := range resultMap.Upload {
+		notificationBody += fmt.Sprintf("  - %s => %v\n", key, uploadErr)
 	}
 
 	notificationBody += "\n\nTombstones:\n"
-	for _, tombstone := range objectRequests.TombstoneKeys {
-		notificationBody += fmt.Sprintf("  - %s\n", tombstone)
+	for key, tombstoneErr := range resultMap.Tombstone {
+		notificationBody += fmt.Sprintf("  - %s => %v\n", key, tombstoneErr)
 	}
 
 	snsPublishReq := &sns.PublishInput{
 		Message:  aws.String(notificationBody),
-		TopicArn: aws.String(snsTopic),
+		TopicArn: aws.String("arn:aws:sns:us-east-2:719670394721:nass3sync"),
 	}
 	_, publishErr := snsClient.Publish(context.TODO(), snsPublishReq)
 

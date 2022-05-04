@@ -35,9 +35,9 @@ func TestLocalFileNotInBucket(t *testing.T) {
 	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
 
 	assert.Nil(t, syncErr)
-	assert.Len(t, syncedObjects.TombstoneKeys, 0)
-	assert.Len(t, syncedObjects.UploadKeys, 1)
-	assert.Contains(t, syncedObjects.UploadKeys, "/folder2/not-real-file")
+	assert.Len(t, syncedObjects.Tombstone, 0)
+	assert.Len(t, syncedObjects.Upload, 1)
+	assert.Contains(t, syncedObjects.Upload, "/folder2/not-real-file")
 }
 
 func TestLocalFileIsOlder(t *testing.T) {
@@ -70,8 +70,8 @@ func TestLocalFileIsOlder(t *testing.T) {
 	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
 
 	assert.Nil(t, syncErr)
-	assert.Len(t, syncedObjects.TombstoneKeys, 0)
-	assert.Len(t, syncedObjects.UploadKeys, 0)
+	assert.Len(t, syncedObjects.Tombstone, 0)
+	assert.Len(t, syncedObjects.Upload, 0)
 }
 
 func TestLocalFileIsNewer(t *testing.T) {
@@ -103,9 +103,9 @@ func TestLocalFileIsNewer(t *testing.T) {
 	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
 
 	assert.Nil(t, syncErr)
-	assert.Len(t, syncedObjects.TombstoneKeys, 0)
-	assert.Len(t, syncedObjects.UploadKeys, 1)
-	assert.Contains(t, syncedObjects.UploadKeys, "/folder2/not-real-file")
+	assert.Len(t, syncedObjects.Tombstone, 0)
+	assert.Len(t, syncedObjects.Upload, 1)
+	assert.Contains(t, syncedObjects.Upload, "/folder2/not-real-file")
 }
 
 func TestBucketFileNotOnLocalFS(t *testing.T) {
@@ -132,9 +132,9 @@ func TestBucketFileNotOnLocalFS(t *testing.T) {
 	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
 
 	assert.Nil(t, syncErr)
-	assert.Len(t, syncedObjects.TombstoneKeys, 1)
-	assert.Len(t, syncedObjects.UploadKeys, 0)
-	assert.Contains(t, syncedObjects.TombstoneKeys, "/folder2/not-real-file")
+	assert.Len(t, syncedObjects.Tombstone, 1)
+	assert.Len(t, syncedObjects.Upload, 0)
+	assert.Contains(t, syncedObjects.Tombstone, "/folder2/not-real-file")
 }
 
 func TestFilesMatchingExclusionNotUploaded(t *testing.T) {
@@ -160,10 +160,10 @@ func TestFilesMatchingExclusionNotUploaded(t *testing.T) {
 	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
 
 	assert.Nil(t, syncErr)
-	assert.Len(t, syncedObjects.TombstoneKeys, 0)
-	assert.Len(t, syncedObjects.UploadKeys, 1)
-	assert.Contains(t, syncedObjects.UploadKeys, "/folder2/somewhat-real-file")
-	assert.NotContains(t, syncedObjects.UploadKeys, "/folder2/not-real-file")
+	assert.Len(t, syncedObjects.Tombstone, 0)
+	assert.Len(t, syncedObjects.Upload, 1)
+	assert.Contains(t, syncedObjects.Upload, "/folder2/somewhat-real-file")
+	assert.NotContains(t, syncedObjects.Upload, "/folder2/not-real-file")
 }
 
 func TestSyncRoutineErrosWhenAnotherIsRunning(t *testing.T) {
@@ -184,6 +184,6 @@ func TestSyncRoutineErrosWhenAnotherIsRunning(t *testing.T) {
 	assert.NotNil(t, syncErr)
 	assert.ErrorContains(t, syncErr, "Unable to acquire sync lock")
 	assert.Len(t, mockS3Client.UploadRequests, 0)
-	assert.Len(t, syncedObjects.TombstoneKeys, 0)
-	assert.Len(t, syncedObjects.UploadKeys, 0)
+	assert.Len(t, syncedObjects.Tombstone, 0)
+	assert.Len(t, syncedObjects.Upload, 0)
 }
