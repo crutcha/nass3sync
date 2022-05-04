@@ -42,8 +42,12 @@ func main() {
 	log.Info("----------")
 
 	bucketClient, clientErr := appConfig.ClientFromConfig()
+	notifier, notifierErr := appConfig.NotifierFromConfig()
 	if clientErr != nil {
 		log.Fatalf("Error creating bucket client from config: %s", clientErr)
+	}
+	if notifierErr != nil {
+		log.Fatalf("Error creating notifier: %s", notifierErr)
 	}
 
 	scheduler := gocron.NewScheduler(time.UTC)
@@ -55,6 +59,7 @@ func main() {
 			doSync,
 			bucketClient,
 			sc,
+			notifier,
 			syncLock,
 		)
 		if scErr != nil {
@@ -69,7 +74,7 @@ func main() {
 	}
 
 	for _, bc := range appConfig.Backup {
-		bcJob, bcErr := scheduler.Cron(bc.At).Do(doBackup, bucketClient, bc)
+		bcJob, bcErr := scheduler.Cron(bc.At).Do(doBackup, bucketClient, bc, notifier)
 		if bcErr != nil {
 			log.Fatal(bcErr)
 		}

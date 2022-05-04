@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -11,9 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/sns"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -26,13 +22,6 @@ type ObjectRequests struct {
 	TombstoneKeys []string
 	UploadKeys    map[string]string
 }
-
-/*
-type UploadResult struct {
-	Upload    sync.Map
-	Tombstone sync.Map
-}
-*/
 
 type ResultMap struct {
 	Upload    map[string]error
@@ -52,7 +41,7 @@ func (r *ResultMap) AddTombstoneResult(key string, result error) {
 	r.Tombstone[key] = result
 }
 
-func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) (*ResultMap, error) {
+func doSync(client BucketClient, sc SyncConfig, notifier Notifier, lock *sync.Mutex) (*ResultMap, error) {
 	resultMap := &ResultMap{
 		Upload:    make(map[string]error),
 		Tombstone: make(map[string]error),
@@ -136,15 +125,9 @@ func doSync(client BucketClient, sc SyncConfig, lock *sync.Mutex) (*ResultMap, e
 	duration := syncEndTime.Sub(syncStartTime)
 	log.Info(fmt.Sprintf("Sync complete for %s. Took %s", sc.SourceFolder, duration.String()))
 
-	/*
-		if s.snsTopic != "" {
-			notifyErr := notifySyncResultsViaSns(s.snsClient, s.snsTopic, objectRequests)
-			if notifyErr != nil {
-				log.Warn(fmt.Sprintf("Error notifying sync results: %s", notifyErr))
-			}
-		}
-	*/
-	notifySyncResultsViaSns(resultMap)
+	if notifier != nil {
+		notifier.NotifySyncResults(sc, resultMap)
+	}
 
 	return resultMap, nil
 }
@@ -230,7 +213,7 @@ func doTombstoneObject(
 	return nil
 }
 
-func doBackup(client BucketClient, bc BackupConfig) {
+func doBackup(client BucketClient, bc BackupConfig, notifier Notifier) {
 	// TODO: move file walk into util that returns list of paths
 	filesToCompress := make([]string, 0)
 	walkErr := filepath.Walk(bc.SourceFolder, func(path string, f os.FileInfo, err error) error {
@@ -270,39 +253,6 @@ func doBackup(client BucketClient, bc BackupConfig) {
 	} else {
 		log.Info("Upload succeded for ", fileKey)
 	}
-}
 
-// TODO: this doesn't actually capture if upload or tombstone operations were successful or
-// returned an error. need to update this func to accomodate for each individual key result.
-func notifySyncResultsViaSns(resultMap *ResultMap) error {
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithSharedConfigProfile("nass3sync"),
-		config.WithRegion("us-east-2"))
-
-	fmt.Println(err)
-	snsClient := sns.NewFromConfig(cfg)
-
-	requiresNotification := len(resultMap.Tombstone) != 0 || len(resultMap.Upload) != 0
-	// we only want to notify if something actually happened
-	if !requiresNotification {
-		return nil
-	}
-
-	notificationBody := "Uploads:\n"
-	for key, uploadErr := range resultMap.Upload {
-		notificationBody += fmt.Sprintf("  - %s => %v\n", key, uploadErr)
-	}
-
-	notificationBody += "\n\nTombstones:\n"
-	for key, tombstoneErr := range resultMap.Tombstone {
-		notificationBody += fmt.Sprintf("  - %s => %v\n", key, tombstoneErr)
-	}
-
-	snsPublishReq := &sns.PublishInput{
-		Message:  aws.String(notificationBody),
-		TopicArn: aws.String("arn:aws:sns:us-east-2:719670394721:nass3sync"),
-	}
-	_, publishErr := snsClient.Publish(context.TODO(), snsPublishReq)
-
-	return publishErr
+	notifier.NotifyBackupResults(bc, tarFile, putErr)
 }

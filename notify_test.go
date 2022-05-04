@@ -21,6 +21,7 @@ func TestSNSMaxSize(t *testing.T) {
 
 	letters := []rune(" abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	b := make([]rune, 262144) // max sns size
+	//b := make([]rune, 262145) // max sns size
 	for i := range b {
 		b[i] = letters[rand.Intn(len(letters))]
 
@@ -29,6 +30,7 @@ func TestSNSMaxSize(t *testing.T) {
 	snsPublishReq := &sns.PublishInput{
 		Message:  aws.String(string(b)),
 		TopicArn: aws.String("arn:aws:sns:us-east-2:719670394721:nass3sync"),
+		Subject:  aws.String("LOLNOU"),
 	}
 	result, publishErr := snsClient.Publish(context.TODO(), snsPublishReq)
 	fmt.Printf("SNS result: %+v\n", result)

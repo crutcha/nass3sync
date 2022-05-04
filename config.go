@@ -6,10 +6,12 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
 )
 
 type AppConfig struct {
 	Provider    CloudProviderConfig
+	Notify      NotifyConfig
 	Concurrency int `default:"1"`
 	Sync        []SyncConfig
 	Backup      []BackupConfig
@@ -21,6 +23,14 @@ type CloudProviderConfig struct {
 	Profile string
 	Region  string `required:"true"`
 }
+
+type NotifyConfig struct {
+	Service string
+	ID      string
+	Profile string
+	Region  string
+}
+
 type SyncConfig struct {
 	SourceFolder      string `required:"true"`
 	DestinationBucket string `required:"true"`
@@ -53,6 +63,25 @@ func (c AppConfig) ClientFromConfig() (BucketClient, error) {
 	}
 
 	return bucketClient, nil
+}
+
+func (c AppConfig) NotifierFromConfig() (Notifier, error) {
+	var notifier Notifier
+
+	switch c.Notify.Service {
+	case "sns":
+		cfg, cfgErr := config.LoadDefaultConfig(context.TODO(),
+			config.WithSharedConfigProfile(c.Notify.Profile),
+			config.WithRegion(c.Notify.Region))
+
+		if cfgErr != nil {
+			return notifier, cfgErr
+		}
+		snsClient := sns.NewFromConfig(cfg)
+		notifier = &SNSNotifier{Client: snsClient, Topic: c.Notify.ID}
+	}
+
+	return notifier, nil
 }
 
 func (c AppConfig) ConfigStringArray() []string {
