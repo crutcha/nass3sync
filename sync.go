@@ -254,5 +254,7 @@ func doBackup(client BucketClient, bc BackupConfig, notifier Notifier) {
 		log.Info("Upload succeded for ", fileKey)
 	}
 
-	notifier.NotifyBackupResults(bc, tarFile, putErr)
+	if notifier != nil {
+		notifier.NotifyBackupResults(bc, tarFile, putErr)
+	}
 }

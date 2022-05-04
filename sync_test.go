@@ -32,7 +32,7 @@ func TestLocalFileNotInBucket(t *testing.T) {
 	}
 
 	lock := &sync.Mutex{}
-	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, nil, lock)
 
 	assert.Nil(t, syncErr)
 	assert.Len(t, syncedObjects.Tombstone, 0)
@@ -67,7 +67,7 @@ func TestLocalFileIsOlder(t *testing.T) {
 	}
 
 	lock := &sync.Mutex{}
-	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, nil, lock)
 
 	assert.Nil(t, syncErr)
 	assert.Len(t, syncedObjects.Tombstone, 0)
@@ -100,7 +100,7 @@ func TestLocalFileIsNewer(t *testing.T) {
 	}
 
 	lock := &sync.Mutex{}
-	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, nil, lock)
 
 	assert.Nil(t, syncErr)
 	assert.Len(t, syncedObjects.Tombstone, 0)
@@ -129,7 +129,7 @@ func TestBucketFileNotOnLocalFS(t *testing.T) {
 	}
 
 	lock := &sync.Mutex{}
-	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, nil, lock)
 
 	assert.Nil(t, syncErr)
 	assert.Len(t, syncedObjects.Tombstone, 1)
@@ -157,7 +157,7 @@ func TestFilesMatchingExclusionNotUploaded(t *testing.T) {
 	}
 
 	lock := &sync.Mutex{}
-	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, nil, lock)
 
 	assert.Nil(t, syncErr)
 	assert.Len(t, syncedObjects.Tombstone, 0)
@@ -179,7 +179,7 @@ func TestSyncRoutineErrosWhenAnotherIsRunning(t *testing.T) {
 	lock := &sync.Mutex{}
 	lock.Lock()
 	defer lock.Unlock()
-	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, lock)
+	syncedObjects, syncErr := doSync(mockS3Client, mockSyncConfig, nil, lock)
 
 	assert.NotNil(t, syncErr)
 	assert.ErrorContains(t, syncErr, "Unable to acquire sync lock")
