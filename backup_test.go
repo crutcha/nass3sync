@@ -34,7 +34,7 @@ func TestTarAndUploadSimple(t *testing.T) {
 	doBackup(mockClient, mockBackupConfig, nil)
 
 	assert.Len(t, mockClient.UploadRequests, 1)
-	assert.Equal(t, mockClient.UploadRequests[0].Bucket, "notatallarealbucket")
+	assert.Equal(t, mockClient.UploadRequests[0].DestBucket, "notatallarealbucket")
 	assert.Regexp(t, regexp.MustCompile(keyRegex), mockClient.UploadRequests[0].Key)
 }
 
@@ -62,6 +62,6 @@ func TestTarAndUploadNested(t *testing.T) {
 
 	doBackup(mockClient, mockBackupConfig, nil)
 	assert.Len(t, mockClient.UploadRequests, 1)
-	assert.Equal(t, mockClient.UploadRequests[0].Bucket, "notatallarealbucket")
+	assert.Equal(t, mockClient.UploadRequests[0].DestBucket, "notatallarealbucket")
 	assert.Regexp(t, regexp.MustCompile(keyRegex), mockClient.UploadRequests[0].Key)
 }

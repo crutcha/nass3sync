@@ -126,6 +126,7 @@ func TestBucketFileNotOnLocalFS(t *testing.T) {
 	mockSyncConfig := SyncConfig{
 		SourceFolder:      "/folder1",
 		DestinationBucket: "not-real-bucket",
+		TombstoneBucket:   "some-tombstone-bucket",
 	}
 
 	lock := &sync.Mutex{}
