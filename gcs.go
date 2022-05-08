@@ -9,10 +9,23 @@ import (
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 type GCSClient struct {
 	Client *storage.Client
+}
+
+func NewGCSBucketClient(appConfig AppConfig) (BucketClient, error) {
+	var bucketClient BucketClient
+	client, err := storage.NewClient(context.TODO(), option.WithCredentialsFile(appConfig.Provider.CredentialFile))
+	if err != nil {
+		return bucketClient, fmt.Errorf("storage.NewClient: %v", err)
+
+	}
+	bucketClient = &GCSClient{Client: client}
+
+	return bucketClient, nil
 }
 
 func (s *GCSClient) ListObjects(bucketName string) (map[string]ObjectInfo, error) {

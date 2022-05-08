@@ -2,17 +2,35 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type S3Client struct {
 	Client *s3.Client
+}
+
+func NewS3BucketClient(appConfig AppConfig) (BucketClient, error) {
+	var bucketClient BucketClient
+
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithSharedConfigProfile(appConfig.Provider.Profile),
+		config.WithRegion(appConfig.Provider.Region))
+	if err != nil {
+		return bucketClient, fmt.Errorf("Error creating s3 client: %+v\n", err)
+
+	}
+	awsS3Client := s3.NewFromConfig(cfg)
+	bucketClient = &S3Client{Client: awsS3Client}
+
+	return bucketClient, nil
 }
 
 func (s *S3Client) ListObjects(bucketName string) (map[string]ObjectInfo, error) {

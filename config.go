@@ -1,15 +1,16 @@
 package main
 
 import (
-	"context"
 	"fmt"
-
-	"cloud.google.com/go/storage"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/sns"
-	"google.golang.org/api/option"
 )
+
+var bucketClientFactoryMap = map[string]BucketClientFactory{
+	"aws": NewS3BucketClient,
+	"gcs": NewGCSBucketClient,
+}
+var notifierFactoryMap = map[string]NotifierFactory{
+	"sns": NewSNSNotifier,
+}
 
 type AppConfig struct {
 	Provider    CloudProviderConfig
@@ -49,50 +50,30 @@ type BackupConfig struct {
 	At                string `required:"true"`
 }
 
-func (c AppConfig) ClientFromConfig() (BucketClient, error) {
+type BucketClientFactory func(AppConfig) (BucketClient, error)
+type NotifierFactory func(AppConfig) (Notifier, error)
+
+func BucketClientFromConfig(appConfig AppConfig) (BucketClient, error) {
 	var bucketClient BucketClient
-
-	switch c.Provider.Name {
-	case "aws":
-		cfg, err := config.LoadDefaultConfig(context.TODO(),
-			config.WithSharedConfigProfile(c.Provider.Profile),
-			config.WithRegion(c.Provider.Region))
-		if err != nil {
-			return bucketClient, fmt.Errorf("Error creating s3 client: %+v\n", err)
-		}
-		awsS3Client := s3.NewFromConfig(cfg)
-		bucketClient = &S3Client{Client: awsS3Client}
-	case "gcp":
-		client, err := storage.NewClient(context.TODO(), option.WithCredentialsFile(c.Provider.CredentialFile))
-		if err != nil {
-			return bucketClient, fmt.Errorf("storage.NewClient: %v", err)
-
-		}
-		bucketClient = &GCSClient{Client: client}
-	default:
-		return bucketClient, fmt.Errorf("Unknown cloud provider: %s", c.Provider)
+	clientFactory, ok := bucketClientFactoryMap[appConfig.Provider.Name]
+	if !ok {
+		return nil, fmt.Errorf("Unknown cloud object storage provider: %s", appConfig.Provider.Name)
 	}
 
-	return bucketClient, nil
+	bucketClient, bucketClientErr := clientFactory(appConfig)
+	return bucketClient, bucketClientErr
 }
 
-func (c AppConfig) NotifierFromConfig() (Notifier, error) {
+func NotifierFromConfig(appConfig AppConfig) (Notifier, error) {
 	var notifier Notifier
+	var notifierErr error
 
-	switch c.Notify.Service {
-	case "sns":
-		cfg, cfgErr := config.LoadDefaultConfig(context.TODO(),
-			config.WithSharedConfigProfile(c.Notify.Profile),
-			config.WithRegion(c.Notify.Region))
-
-		if cfgErr != nil {
-			return notifier, cfgErr
-		}
-		snsClient := sns.NewFromConfig(cfg)
-		notifier = &SNSNotifier{Client: snsClient, Topic: c.Notify.ID}
+	notifierFactory, ok := notifierFactoryMap[appConfig.Notify.Service]
+	if ok {
+		notifier, notifierErr = notifierFactory(appConfig)
 	}
 
-	return notifier, nil
+	return notifier, notifierErr
 }
 
 func (c AppConfig) ConfigStringArray() []string {

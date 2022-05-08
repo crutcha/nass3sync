@@ -41,8 +41,8 @@ func main() {
 	}
 	log.Info("----------")
 
-	bucketClient, clientErr := appConfig.ClientFromConfig()
-	notifier, notifierErr := appConfig.NotifierFromConfig()
+	bucketClient, clientErr := BucketClientFromConfig(appConfig)
+	notifier, notifierErr := NotifierFromConfig(appConfig)
 	if clientErr != nil {
 		log.Fatalf("Error creating bucket client from config: %s", clientErr)
 	}
