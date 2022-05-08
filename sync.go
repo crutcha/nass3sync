@@ -70,6 +70,7 @@ func doSync(client BucketClient, sc SyncConfig, notifier Notifier, lock *sync.Mu
 
 	objectRequests := ObjectRequests{
 		TombstoneKeys: make([]string, 0),
+		DeleteKeys:    make([]string, 0),
 		UploadKeys:    make(map[string]string),
 	}
 
