@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/go-co-op/gocron"
-	"github.com/jinzhu/configor"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -28,8 +27,7 @@ func main() {
 		panic("Required flag -configfile not set but required")
 	}
 
-	var appConfig AppConfig
-	configErr := configor.Load(&appConfig, *configFilePath)
+	appConfig, configErr := InitAppConfig(*configFilePath)
 	if configErr != nil {
 		log.Fatal(configErr)
 	}

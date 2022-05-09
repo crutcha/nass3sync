@@ -2,14 +2,31 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/jinzhu/configor"
 )
 
-var bucketClientFactoryMap = map[string]BucketClientFactory{
-	"aws": NewS3BucketClient,
-	"gcs": NewGCSBucketClient,
-}
-var notifierFactoryMap = map[string]NotifierFactory{
-	"sns": NewSNSNotifier,
+var (
+	bucketClientFactoryMap = map[string]BucketClientFactory{
+		"aws": NewS3BucketClient,
+		"gcs": NewGCSBucketClient,
+	}
+	notifierFactoryMap = map[string]NotifierFactory{
+		"sns": NewSNSNotifier,
+	}
+	semaphore chan int
+)
+
+func InitAppConfig(filepath string) (AppConfig, error) {
+	var appConfig AppConfig
+	configErr := configor.Load(&appConfig, filepath)
+	if configErr != nil {
+		return appConfig, configErr
+	}
+
+	semaphore = make(chan int, appConfig.Concurrency)
+
+	return appConfig, nil
 }
 
 type AppConfig struct {

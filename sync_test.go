@@ -15,6 +15,14 @@ func createMockWalkFunc(mockResult map[string]os.FileInfo) walkFunc {
 	}
 }
 
+func TestMain(m *testing.M) {
+	// semaphore is created by on config init function
+	// keep it at 1 for tests
+	semaphore = make(chan int, 1)
+	exitVal := m.Run()
+	os.Exit(exitVal)
+}
+
 func TestLocalFileNotInBucket(t *testing.T) {
 	mockFileInfoResults := map[string]os.FileInfo{
 		"/folder1/folder2/not-real-file": mockFileInfo{

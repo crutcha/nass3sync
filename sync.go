@@ -61,6 +61,7 @@ func doSync(client BucketClient, sc SyncConfig, notifier Notifier, lock *sync.Mu
 		return resultMap, fmt.Errorf("Unable to acquire sync lock")
 	}
 	defer lock.Unlock()
+	log.Info(fmt.Sprintf("Sync starting for %s.", sc.SourceFolder))
 	syncStartTime := time.Now()
 
 	// TODO: for now with a small number of exclusion matchers, this OK, but we should figure out
@@ -149,24 +150,23 @@ func doSync(client BucketClient, sc SyncConfig, notifier Notifier, lock *sync.Mu
 
 func syncObjectRequests(client BucketClient, objReqs ObjectRequests, resultMap *ResultMap, destBucket, tombstoneBucket string) {
 	// TODO: from app config
-	semaphore := make(chan int, 5)
 	var wg sync.WaitGroup
 
 	for fileKey, fileInfo := range objReqs.UploadKeys {
 		wg.Add(1)
-		go doUploadFile(client, destBucket, fileKey, fileInfo, semaphore, &wg, resultMap)
+		go doUploadFile(client, destBucket, fileKey, fileInfo, &wg, resultMap)
 	}
 
 	if tombstoneBucket != "" {
 		for _, key := range objReqs.TombstoneKeys {
 			wg.Add(1)
-			go doTombstoneObject(client, destBucket, tombstoneBucket, key, semaphore, &wg, resultMap)
+			go doTombstoneObject(client, destBucket, tombstoneBucket, key, &wg, resultMap)
 		}
 	}
 
 	for _, key := range objReqs.DeleteKeys {
 		wg.Add(1)
-		go doDeleteObject(client, destBucket, key, semaphore, &wg, resultMap)
+		go doDeleteObject(client, destBucket, key, &wg, resultMap)
 	}
 
 	wg.Wait()
@@ -175,7 +175,6 @@ func syncObjectRequests(client BucketClient, objReqs ObjectRequests, resultMap *
 func doUploadFile(
 	client BucketClient,
 	bucket, key, filePath string,
-	semaphore chan int,
 	wg *sync.WaitGroup,
 	resultMap *ResultMap,
 ) error {
@@ -205,7 +204,6 @@ func doUploadFile(
 func doTombstoneObject(
 	client BucketClient,
 	sourceBucket, destinationBucket, key string,
-	semaphore chan int,
 	wg *sync.WaitGroup,
 	resultMap *ResultMap,
 ) error {
@@ -240,7 +238,6 @@ func doTombstoneObject(
 func doDeleteObject(
 	client BucketClient,
 	bucket, key string,
-	semaphore chan int,
 	wg *sync.WaitGroup,
 	resultMap *ResultMap,
 ) error {
