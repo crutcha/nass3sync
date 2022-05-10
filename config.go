@@ -35,7 +35,6 @@ type AppConfig struct {
 	Concurrency int `default:"1"`
 	Sync        []SyncConfig
 	Backup      []BackupConfig
-	SNSTopic    string
 }
 
 type CloudProviderConfig struct {
@@ -99,10 +98,6 @@ func (c AppConfig) ConfigStringArray() []string {
 	configStrArr = append(configStrArr, fmt.Sprintf("  - IAMProfile: %s", c.Provider.Profile))
 	configStrArr = append(configStrArr, fmt.Sprintf("  - CredentialFile: %s", c.Provider.CredentialFile))
 	configStrArr = append(configStrArr, fmt.Sprintf("  - Concurrent Uploads: %d", c.Concurrency))
-
-	if c.SNSTopic != "" {
-		configStrArr = append(configStrArr, fmt.Sprintf("  - SNSTopic: %s", c.SNSTopic))
-	}
 
 	configStrArr = append(configStrArr, "Folders To Sync:")
 	for _, syncConfig := range c.Sync {

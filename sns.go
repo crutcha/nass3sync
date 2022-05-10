@@ -20,15 +20,28 @@ func NewSNSNotifier(appConfig AppConfig) (Notifier, error) {
 	if cfgErr != nil {
 		return notifier, cfgErr
 	}
-	snsClient := sns.NewFromConfig(cfg)
+	snsClient := &SNSClient{sns.NewFromConfig(cfg)}
 	notifier = &SNSNotifier{Client: snsClient, Topic: appConfig.Notify.ID}
 
 	return notifier, nil
 
 }
 
-type SNSNotifier struct {
+type SNSClientIface interface {
+	PublishMessage(msg *sns.PublishInput) error
+}
+
+type SNSClient struct {
 	Client *sns.Client
+}
+
+func (s *SNSClient) PublishMessage(msg *sns.PublishInput) error {
+	_, publishErr := s.Client.Publish(context.TODO(), msg)
+	return publishErr
+}
+
+type SNSNotifier struct {
+	Client SNSClientIface
 	Topic  string
 }
 
@@ -38,14 +51,28 @@ func (s *SNSNotifier) NotifySyncResults(syncConfig SyncConfig, resultMap *Result
 		return nil
 	}
 
-	notificationBody := "Uploads:\n"
-	for key, keyErr := range resultMap.Upload {
-		notificationBody += fmt.Sprintf("  - %s => %v\n", key, keyErr)
+	// TODO: this has a maximum message size of 256KB, need to account for that
+	notificationBody := ""
+	if len(resultMap.Upload) != 0 {
+		notificationBody += "Uploads:\n"
+		for key, keyErr := range resultMap.Upload {
+			notificationBody += fmt.Sprintf("  - %s => %v\n", key, keyErr)
+		}
+
 	}
 
-	notificationBody += "\n\nTombstones:\n"
-	for key, keyErr := range resultMap.Tombstone {
-		notificationBody += fmt.Sprintf("  - %s => %v\n", key, keyErr)
+	if len(resultMap.Tombstone) != 0 {
+		notificationBody += "\n\nTombstones:\n"
+		for key, keyErr := range resultMap.Tombstone {
+			notificationBody += fmt.Sprintf("  - %s => %v\n", key, keyErr)
+		}
+	}
+
+	if len(resultMap.Delete) != 0 {
+		notificationBody += "\n\nDeleted:\n"
+		for key, keyErr := range resultMap.Delete {
+			notificationBody += fmt.Sprintf("  - %s => %v\n", key, keyErr)
+		}
 	}
 
 	snsPublishReq := &sns.PublishInput{
@@ -53,7 +80,7 @@ func (s *SNSNotifier) NotifySyncResults(syncConfig SyncConfig, resultMap *Result
 		TopicArn: aws.String(s.Topic),
 		Subject:  aws.String(fmt.Sprintf("Sync results: %s -> %s", syncConfig.SourceFolder, syncConfig.DestinationBucket)),
 	}
-	_, publishErr := s.Client.Publish(context.TODO(), snsPublishReq)
+	publishErr := s.Client.PublishMessage(snsPublishReq)
 
 	return publishErr
 
@@ -72,7 +99,7 @@ func (s *SNSNotifier) NotifyBackupResults(backupConfig BackupConfig, backupFile 
 		TopicArn: aws.String(s.Topic),
 		Subject:  aws.String(subject),
 	}
-	_, publishErr := s.Client.Publish(context.TODO(), snsPublishReq)
+	publishErr := s.Client.PublishMessage(snsPublishReq)
 
 	return publishErr
 }
