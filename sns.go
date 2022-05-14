@@ -89,7 +89,14 @@ func (s *SNSNotifier) NotifySyncResults(syncConfig SyncConfig, resultMap *Result
 func (s *SNSNotifier) NotifyBackupResults(backupConfig BackupConfig, backupFile *os.File, backupErr error) error {
 	fileStat, _ := backupFile.Stat()
 
-	subject := fmt.Sprintf("Backup result: %s", backupConfig.SourceFolder)
+	var statusString string
+	if backupErr == nil {
+		statusString = "succeeded"
+	} else {
+		statusString = "failed"
+	}
+
+	subject := fmt.Sprintf("Backup %s: %s", statusString, backupConfig.SourceFolder)
 	notificationBody := fmt.Sprintf("Backup File Name: %s\n", fileStat.Name())
 	notificationBody += fmt.Sprintf("Backup File Size: %d\n", fileStat.Size())
 	notificationBody += fmt.Sprintf("Error: %v\n", backupErr)
