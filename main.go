@@ -13,18 +13,20 @@ import (
 )
 
 func main() {
-	// TODO: put me into config or as env var!
-	//log.SetLevel(log.DebugLevel)
-	logFormatter := new(log.TextFormatter)
-	logFormatter.TimestampFormat = "2006-01-02 15:04:05"
-	logFormatter.FullTimestamp = true
-	log.SetFormatter(logFormatter)
-
 	configFilePath := flag.String("configfile", "", "Configuration File Path")
+	debugLogging := flag.Bool("debug", false, "enable debug logging")
 	flag.Parse()
 
 	if *configFilePath == "" {
 		panic("Required flag -configfile not set but required")
+	}
+
+	logFormatter := new(log.TextFormatter)
+	logFormatter.TimestampFormat = "2006-01-02 15:04:05"
+	logFormatter.FullTimestamp = true
+	log.SetFormatter(logFormatter)
+	if *debugLogging {
+		log.SetLevel(log.DebugLevel)
 	}
 
 	appConfig, configErr := InitAppConfig(*configFilePath)

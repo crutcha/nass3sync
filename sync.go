@@ -75,9 +75,6 @@ func doSync(client BucketClient, sc SyncConfig, notifier Notifier, lock *sync.Mu
 		UploadKeys:    make(map[string]string),
 	}
 
-	// TODO: probably some better way to handle this
-	// since gocron is setup with a pointer to a synchandler, we need to flush
-	// the state from the last time it ran
 	bucketFiles, listBucketErr := client.ListObjects(sc.DestinationBucket)
 	if listBucketErr != nil {
 		log.Warn(fmt.Sprintf("listBucket err: %s", listBucketErr))
@@ -97,7 +94,6 @@ func doSync(client BucketClient, sc SyncConfig, notifier Notifier, lock *sync.Mu
 		}
 
 		pathComponents := strings.Split(localPath, sc.SourceFolder)
-		// TODO: ensure we have at least 2 components?
 		uploadKey := pathComponents[1]
 		remoteObj, ok := bucketFiles[strings.TrimPrefix(uploadKey, "/")]
 
@@ -149,7 +145,6 @@ func doSync(client BucketClient, sc SyncConfig, notifier Notifier, lock *sync.Mu
 }
 
 func syncObjectRequests(client BucketClient, objReqs ObjectRequests, resultMap *ResultMap, destBucket, tombstoneBucket string) {
-	// TODO: from app config
 	var wg sync.WaitGroup
 
 	for fileKey, fileInfo := range objReqs.UploadKeys {
@@ -256,17 +251,15 @@ func doDeleteObject(
 }
 
 func doBackup(client BucketClient, bc BackupConfig, notifier Notifier) {
-	// TODO: move file walk into util that returns list of paths
-	filesToCompress := make([]string, 0)
-	walkErr := filepath.Walk(bc.SourceFolder, func(path string, f os.FileInfo, err error) error {
-		if !f.IsDir() {
-			filesToCompress = append(filesToCompress, path)
-		}
-		return nil
-	})
+	fileMap, walkErr := concreteWalkFunc(bc.SourceFolder)
 	if walkErr != nil {
 		log.Error(fmt.Sprintf("Backup directory walk failed: %s", walkErr))
 
+	}
+
+	filesToCompress := make([]string, 0)
+	for key, _ := range fileMap {
+		filesToCompress = append(filesToCompress, key)
 	}
 
 	now := time.Now()
