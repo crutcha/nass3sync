@@ -13,13 +13,9 @@ import (
 )
 
 func main() {
-	configFilePath := flag.String("configfile", "", "Configuration File Path")
+	configFilePath := flag.String("configfile", "/etc/warden.yml", "Configuration File Path")
 	debugLogging := flag.Bool("debug", false, "enable debug logging")
 	flag.Parse()
-
-	if *configFilePath == "" {
-		panic("Required flag -configfile not set but required")
-	}
 
 	logFormatter := new(log.TextFormatter)
 	logFormatter.TimestampFormat = "2006-01-02 15:04:05"

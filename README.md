@@ -15,7 +15,7 @@ Warden is an agent for keeping your local filesystem in sync with remote object 
 TODO
 
 ## Configuration
-Configuration is done via a YAML file passed to the agent as a flag upon startup. 
+Configuration is done via a YAML file. The default location for the config file is /etc/warden.yml but can be overriden using the `-configfile` cli flag.
 ```
 warden -configfile myconfig.yml
 ```
