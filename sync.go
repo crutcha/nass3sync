@@ -189,8 +189,9 @@ func doUploadFile(
 	uploadErr := client.UploadFile(bucket, key, fd)
 	if uploadErr != nil {
 		resultMap.AddUploadResult(key, uploadErr)
+	} else {
+		log.Info(fmt.Sprintf("Uploaded file %s as key %s", filePath, key))
 	}
-	log.Info(fmt.Sprintf("Uploaded file %s as key %s", filePath, key))
 	<-semaphore
 
 	return uploadErr
@@ -217,13 +218,14 @@ func doTombstoneObject(
 	}
 
 	delErr := client.DeleteObject(sourceBucket, key)
-	log.Info(fmt.Sprintf("Deleted %s from bucket %s", key, sourceBucket))
 
 	if delErr != nil {
 		log.Warn(fmt.Sprintf("Error deleting original object during tombstone routine: %s", delErr))
 		resultMap.AddTombstoneResult(key, delErr)
 		<-semaphore
 		return delErr
+	} else {
+		log.Info(fmt.Sprintf("Deleted %s from bucket %s", key, sourceBucket))
 	}
 
 	<-semaphore
@@ -239,13 +241,14 @@ func doDeleteObject(
 	resultMap.AddDeleteResult(key, nil)
 	defer wg.Done()
 	delErr := client.DeleteObject(bucket, key)
-	log.Info(fmt.Sprintf("Deleted %s from bucket %s", key, bucket))
 
 	if delErr != nil {
 		log.Warn(fmt.Sprintf("Error deleting: %s", delErr))
 		resultMap.AddDeleteResult(key, delErr)
 		<-semaphore
 		return delErr
+	} else {
+		log.Info(fmt.Sprintf("Deleted %s from bucket %s", key, bucket))
 	}
 	return nil
 }
